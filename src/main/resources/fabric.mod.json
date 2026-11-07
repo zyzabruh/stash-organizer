@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "id": "addon-template",
+  "id": "stash-organizer",
   "version": "${version}",
-  "name": "Addon Template",
-  "description": "An addon template for Meteor Client addons.",
+  "name": "Stash Organizer",
+  "description": "Opens every nearby storage block and reorganises the stash in place: items are grouped, chests are labelled with item frames and shulker boxes are unpacked, packed or kept shut.",
   "authors": [
     "seasnail"
   ],
   "contact": {
     "sources": "https://github.com/MeteorDevelopment/meteor-addon-template"
   },
-  "icon": "assets/template/icon.png",
+  "icon": "assets/stashorganizer/icon.png",
   "environment": "client",
   "entrypoints": {
     "meteor": [
@@ -18,10 +18,10 @@
     ]
   },
   "mixins": [
-    "addon-template.mixins.json"
+    "stash-organizer.mixins.json"
   ],
   "custom": {
-    "meteor-client:color": "225,25,25",
+    "meteor-client:color": "90,200,120",
     "modmenu": {
       "parent": {
         "id": "meteor-client"
@@ -30,7 +30,9 @@
   },
   "depends": {
     "java": ">=21",
-    "minecraft": ["${mc_version}"],
+    "minecraft": [
+      "${mc_version}"
+    ],
     "meteor-client": "*"
   }
 }

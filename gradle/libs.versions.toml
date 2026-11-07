@@ -12,6 +12,12 @@ loom = "1.14-SNAPSHOT"
 # Meteor (https://github.com/MeteorDevelopment/meteor-client/)
 meteor = "1.21.11-SNAPSHOT"
 
+# Baritone (optional, compile only)
+baritone = "1.21.11-SNAPSHOT"
+
+# Tests
+junit = "5.11.3"
+
 # Mods
 
 [libraries]
@@ -22,6 +28,13 @@ fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-l
 
 # Meteor client
 meteor-client = { module = "meteordevelopment:meteor-client", version.ref = "meteor" }
+
+# Baritone
+baritone = { module = "meteordevelopment:baritone", version.ref = "baritone" }
+
+# Tests
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.11.3" }
 
 # Mods
 

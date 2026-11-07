@@ -9,6 +9,8 @@ base {
 }
 
 repositories {
+    mavenCentral()
+
     maven {
         name = "meteor-maven"
         url = uri("https://maven.meteordev.org/releases")
@@ -27,6 +29,13 @@ dependencies {
 
     // Meteor
     modImplementation(libs.meteor.client)
+
+    // Baritone (optional at runtime)
+    modCompileOnly(libs.baritone)
+
+    // Pure logic tests (item grouping, shulker name filter, plan rules, step scripts on fakes)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks {
@@ -63,5 +72,9 @@ tasks {
         options.release = 21
         options.compilerArgs.add("-Xlint:deprecation")
         options.compilerArgs.add("-Xlint:unchecked")
+    }
+
+    test {
+        useJUnitPlatform()
     }
 }

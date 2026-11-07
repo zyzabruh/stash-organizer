@@ -1,6 +1,20 @@
-# Meteor Addon Template
+# Stash Organizer
 
-A template to allow easy usage of the Meteor Addon API.
+A Meteor Client addon that opens every nearby storage block and reorganises the stash in place: items are grouped,
+chests are labelled with item frames, and shulker boxes are unpacked, packed or kept shut.
+
+## Features
+
+- Scans chests, barrels and shulker boxes in a configurable radius and reads their contents.
+- Groups items by exact item, vanilla family, broad category or metal/gem material, and creates equipment kits.
+- Reuses the existing containers as the chests of those groups, and places extra chests (or overflow shulkers) when a
+  group has no room.
+- Unpacks shulker boxes found in the stash, packs overflow boxes with a pickaxe, and collects boxes left on the floor.
+- Keeps renamed boxes, bulk boxes, kits and boxes holding a protected item shut; the end-of-run report lists them with the
+  rule that protected them.
+- Labels every sorted chest with an item frame holding a representative item.
+- Writes a plan that survives a disconnection, a report of the run and the group-to-chest layout of the previous runs.
+- Walks with Baritone when it is installed, and falls back to Meteor's path manager otherwise.
 
 ### How to use
 
@@ -82,9 +96,10 @@ To update this template to a newer Minecraft version, follow these steps:
 │       │               │── commands
 │       │               │   ╰── CommandExample
 │       │               │── hud
-│       │               │   ╰── HudExample
+│       │               │   │── HudExample
+│       │               │   ╰── StashHud
 │       │               │── modules
-│       │               │   ╰── ModuleExample
+│       │               │   ╰── stashorganizer
 │       │               ╰── AddonTemplate
 │       ╰── resources
 │           │── assets
