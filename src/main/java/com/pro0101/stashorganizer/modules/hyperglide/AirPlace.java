@@ -1,0 +1,278 @@
+package com.pro0101.stashorganizer.modules.hyperglide;
+
+import com.pro0101.stashorganizer.StashOrganizerAddon;
+import com.pro0101.stashorganizer.mixins.ClientAccessor;
+import com.pro0101.stashorganizer.modules.hyperglide.utilities.Client;
+import com.pro0101.stashorganizer.modules.hyperglide.utilities.Hotbar;
+import com.pro0101.stashorganizer.modules.hyperglide.utilities.Placement;
+import com.pro0101.stashorganizer.modules.hyperglide.utilities.Render;
+import meteordevelopment.meteorclient.events.render.Render3DEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.Setting;
+import meteordevelopment.meteorclient.settings.SettingGroup;
+import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import meteordevelopment.orbit.EventHandler;
+import net.minecraft.entity.Entity;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.SpawnEggItem;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
+import java.util.HashMap;
+import java.util.Map;
+
+public class AirPlace extends Module {
+    private static final int retry = 10;
+    private static final int delay = 4;
+
+    private final SettingGroup general = this.settings.getDefaultGroup();
+    private final SettingGroup visuals = this.settings.createGroup("Visuals");
+
+    private final Setting<Double> range = this.general.add(new DoubleSetting.Builder()
+        .name("range")
+        .description("How far Air Place can target.")
+        .defaultValue(3.0)
+        .min(0.0)
+        .sliderMax(6.0)
+        .build()
+    );
+
+    private final Render box = new Render(
+        this.visuals,
+        "Renders the air-place target.",
+        "How the target box is rendered.",
+        "The fill color of the target box.",
+        "The outline color of the target box.",
+        new SettingColor(255, 255, 255, 32),
+        new SettingColor(255, 255, 255, 255)
+    );
+
+    private final Map<BlockPos, Long> pending = new HashMap<>();
+
+    private BlockHitResult hit;
+    private int wait;
+
+    public AirPlace() {
+        super(StashOrganizerAddon.CATEGORY, "air-place",
+            "Places blocks in the air using vanilla timing."
+        );
+    }
+
+    /**
+     * Resets the target and click state.
+     */
+    @Override
+    public void onActivate() {
+        this.hit = null;
+        this.wait = 0;
+    }
+
+    /**
+     * Clears the target and click state.
+     */
+    @Override
+    public void onDeactivate() {
+        this.hit = null;
+        this.wait = 0;
+    }
+
+    //region Event handlers
+
+    /**
+     * Updates the air-place target and handles a new right click.
+     *
+     * @param event post-tick event
+     */
+    @EventHandler
+    private void tick(TickEvent.Post event) {
+        if (!this.ready()) return;
+
+        boolean pressed = this.mc.options.useKey.isPressed();
+        if (this.wait > 0) this.wait--;
+
+        ItemStack stack = this.mc.player.getMainHandStack();
+        if (this.target(stack) && pressed && this.wait <= 0) {
+            this.click(stack);
+        }
+    }
+
+    /**
+     * Renders the current air-place target.
+     *
+     * @param event 3D render event
+     */
+    @EventHandler
+    private void render(Render3DEvent event) {
+        if (this.visible()) {
+            this.box.box(event, this.hit.getBlockPos());
+        }
+    }
+
+    //endregion
+
+    //region Target control
+
+    /**
+     * Updates the current air-place target.
+     *
+     * @param stack selected item stack
+     * @return true when a valid target is available
+     */
+    private boolean target(ItemStack stack) {
+        this.hit = null;
+        if (!this.valid(stack)) return false;
+
+        if (this.mc.crosshairTarget != null &&
+            this.mc.crosshairTarget.getType() != HitResult.Type.MISS) {
+            return false;
+        }
+
+        HitResult ray = this.mc.getCameraEntity().raycast(
+            this.range.get(), 0.0F, false
+        );
+
+        if (!(ray instanceof BlockHitResult block) ||
+            !Placement.open(block.getBlockPos())) {
+            return false;
+        }
+
+        this.hit = block;
+        return true;
+    }
+
+    /**
+     * Checks whether Air Place can update its target.
+     *
+     * @return true when the client is ready
+     */
+    private boolean ready() {
+        Entity entity = this.mc.getCameraEntity();
+        if (Client.ready() && entity != null) {
+            return true;
+        }
+
+        this.hit = null;
+        this.wait = 0;
+        return false;
+    }
+
+    /**
+     * Checks whether the current target should be rendered.
+     *
+     * @return true when the target is still valid
+     */
+    private boolean visible() {
+        return this.box.enabled() &&
+            this.hit != null && Client.ready() &&
+            this.valid(this.mc.player.getMainHandStack()) &&
+            Placement.open(this.hit.getBlockPos());
+    }
+
+    //endregion
+
+    //region Block placement
+
+    /**
+     * Places the selected item at the current target.
+     *
+     * @param stack selected item stack
+     */
+    private void click(ItemStack stack) {
+        this.place(this.hit, stack);
+        this.wait = delay;
+
+        ((ClientAccessor) this.mc).hyperglide$use(delay);
+    }
+
+    /**
+     * Places a block from the hotbar at a specific position.
+     *
+     * @param pos target block position
+     * @param slot hotbar slot containing the block
+     * @return true when the placement packet was sent
+     */
+    public boolean place(BlockPos pos, int slot) {
+        if (!Client.ready() || this.waiting(pos) ||
+            !Placement.open(pos)) {
+            return false;
+        }
+
+        ItemStack stack = Hotbar.stack(slot);
+        if (!(stack.getItem() instanceof BlockItem)) {
+            return false;
+        }
+
+        int selected = Hotbar.selected();
+        if (selected != slot) Hotbar.select(slot);
+
+        try {
+            BlockHitResult hit = new BlockHitResult(
+                Vec3d.ofCenter(pos), Direction.UP, pos, false
+            );
+
+            this.place(hit, stack);
+            this.pending.put(pos.toImmutable(),
+                this.mc.world.getTime() + retry
+            );
+        } finally {
+            if (selected != slot) Hotbar.select(selected);
+        }
+
+        return true;
+    }
+
+    /**
+     * Places the selected item at the target.
+     *
+     * @param hit target block hit result
+     * @param stack selected item stack
+     */
+    private void place(BlockHitResult hit, ItemStack stack) {
+        Placement.place(hit);
+        this.mc.player.swingHand(Hand.MAIN_HAND);
+
+        if (stack.getItem() instanceof BlockItem block) {
+            Placement.sound(block, hit.getBlockPos());
+        }
+    }
+
+    /**
+     * Checks whether placement is waiting for a block update.
+     *
+     * @param pos target block position
+     * @return true while another placement should not be sent
+     */
+    private boolean waiting(BlockPos pos) {
+        long tick = this.mc.world.getTime();
+
+        this.pending.entrySet().removeIf(
+            entry -> entry.getValue() <= tick ||
+            !Placement.open(entry.getKey())
+        );
+
+        return this.pending.containsKey(pos);
+    }
+
+    //endregion
+
+    //region Utilities and validation
+
+    /**
+     * Checks whether an item can be placed using Air Place.
+     *
+     * @param stack item stack to check
+     * @return true when the stack contains a block or spawn egg
+     */
+    private boolean valid(ItemStack stack) {
+        return stack.getItem() instanceof BlockItem
+            || stack.getItem() instanceof SpawnEggItem;
+    }
+
+    //endregion
+}

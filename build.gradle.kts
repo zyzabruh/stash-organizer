@@ -2,6 +2,13 @@ plugins {
     alias(libs.plugins.fabric.loom)
 }
 
+loom {
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName.set("stash-organizer-refmap.json")
+    }
+}
+
 base {
     archivesName = properties["archives_base_name"] as String
     version = libs.versions.mod.version.get()
@@ -19,6 +26,14 @@ repositories {
         name = "meteor-maven-snapshots"
         url = uri("https://maven.meteordev.org/snapshots")
     }
+
+    maven {
+        name = "Modrinth"
+        url = uri("https://api.modrinth.com/maven")
+        content {
+            includeGroup("maven.modrinth")
+        }
+    }
 }
 
 dependencies {
@@ -32,6 +47,11 @@ dependencies {
 
     // Baritone (optional at runtime)
     modCompileOnly(libs.baritone)
+
+    // Xaero's Minimap, World Map and XaeroPlus (optional at runtime, needed by TrailFollower and ChunkRadar)
+    modCompileOnly(libs.xaeros.minimap)
+    modCompileOnly(libs.xaeros.world.map)
+    modCompileOnly(libs.xaeroplus)
 
     // Pure logic tests (item grouping, shulker name filter, plan rules, step scripts on fakes)
     testImplementation(libs.junit.jupiter)

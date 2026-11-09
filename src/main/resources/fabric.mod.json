@@ -5,16 +5,17 @@
   "name": "Stash Organizer",
   "description": "Opens every nearby storage block and reorganises the stash in place: items are grouped, chests are labelled with item frames and shulker boxes are unpacked, packed or kept shut.",
   "authors": [
-    "seasnail"
+    "pro0101"
   ],
+  "license": "GPL-3.0-or-later",
   "contact": {
-    "sources": "https://github.com/MeteorDevelopment/meteor-addon-template"
+    "sources": "https://github.com/pro0101/stash-organizer"
   },
   "icon": "assets/stashorganizer/icon.png",
   "environment": "client",
   "entrypoints": {
     "meteor": [
-      "com.example.addon.AddonTemplate"
+      "com.pro0101.stashorganizer.StashOrganizerAddon"
     ]
   },
   "mixins": [

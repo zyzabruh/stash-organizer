@@ -3,153 +3,67 @@
 A Meteor Client addon that opens every nearby storage block and reorganises the stash in place: items are grouped,
 chests are labelled with item frames, and shulker boxes are unpacked, packed or kept shut.
 
+Author: **pro0101**
+
 ## Features
 
 - Scans chests, barrels and shulker boxes in a configurable radius and reads their contents.
 - Groups items by exact item, vanilla family, broad category or metal/gem material, and creates equipment kits.
 - Reuses the existing containers as the chests of those groups, and places extra chests (or overflow shulkers) when a
-  group has no room.
+  group has no room. When the stash runs out of chests, the groups that have to share one are packed by kind: redstone
+  with redstone, blocks with blocks, ores with ores, instead of a bit of everything in every shared chest.
+- Reads the item frame already standing on a chest and gives that group to the chest first, so a stash labelled by hand
+  keeps its layout.
 - Unpacks shulker boxes found in the stash, packs overflow boxes with a pickaxe, and collects boxes left on the floor.
+- Never puts a shulker box inside another one.
 - Keeps renamed boxes, bulk boxes, kits and boxes holding a protected item shut; the end-of-run report lists them with the
   rule that protected them.
 - Labels every sorted chest with an item frame holding a representative item.
+- Tidies the slots of every chest before labelling: the stacks of one item sit together, the groups keep the order of the
+  plan and the empty slots end at the bottom of the chest (setting `arrange-chests`).
+- Empties a chest that holds items of other groups when the buffer has nowhere to go, so a chest is not left half full
+  while its own group waits elsewhere.
 - Writes a plan that survives a disconnection, a report of the run and the group-to-chest layout of the previous runs.
+  The report has a row per chest: stacks received, stacks given away, stacks taken out to make room, stacks still out of
+  place and the reason they stayed.
 - Walks with Baritone when it is installed, and falls back to Meteor's path manager otherwise.
 
-### How to use
+## Install
 
-#### Use GitHub Template (Recommended)
+1. Install [Meteor Client](https://meteorclient.com) for the matching Minecraft version.
+2. Drop the built jar in the `mods` folder next to Meteor.
+3. Join a world, open the Meteor GUI, go to the `Stash` category and enable `Stash Organizer`.
 
-- Click the green `Use this template` button in the top right corner of this page.  
-  This will create a new repository with this template and a clean history.
+## Usage
 
-#### Clone Manually
+1. Stand in the storage room, near the chests to organise, with at least 8 free inventory slots (or enable the inventory
+   dump).
+2. Enable the module. It scans, plans, places the chests it needs, sorts, arranges, labels and writes its report.
+3. The run stops on its own. The plan, the report and the remembered layout of the previous runs are written in the
+   Meteor folder, under `stash-organizer`.
+4. If the connection drops mid-run, joining the same world re-enables the module and resumes the saved plan.
 
-- Alternatively, clone this repository using these commands for a clean history:
-  ```bash
-  git clone --depth 1 https://github.com/MeteorDevelopment/meteor-addon-template your-addon-name
-  cd your-addon-name
-  rm -rf .git
-  git init
-  git add .
-  git commit -m "Initial commit from template"
-  ```
+## Build
 
-#### Development
-
-- Use this template to add custom modules, commands, HUDs, and other features to Meteor Client.
-- To test, run the `Minecraft Client` configuration in your IDE.
-  This will start a Minecraft client with the Meteor Client mod and your addon loaded.
-- To build, run the gradle `build` task. This will create a JAR file in the `build/libs` folder.
-    - Move the JAR file to the `mods` folder of your Minecraft installation, alongside the Meteor Client mod and run the
-      game.
-
-### Updating to newer Minecraft versions
-
-To update this template to a newer Minecraft version, follow these steps:
-
-1. Ensure a Meteor Client snapshot is available for the new Minecraft version.
-2. Update `gradle/libs.versions.toml` (the versions catalog):
-    - Set the version entries to the new versions. Common keys to update are:
-        - `versions.minecraft` - Minecraft version
-        - `versions.yarn-mappings` - Yarn mappings
-        - `versions.fabric-loader` - Fabric loader version
-        - `versions.meteor` - Meteor Client snapshot version
-    - If your addon depends on other libraries listed under the `[libraries]` section, update their versions there as
-      needed.
-    - After editing, refresh Gradle dependencies and rebuild your project in the IDE.
-3. Update Loom:
-    - Change the `loom` version in `gradle/libs.versions.toml` (the `versions.loom` entry) to the latest version
-      compatible with the new Minecraft version.
-4. Update the Gradle wrapper:
-    - Run the wrapper update command for your platform. Examples:
-      - Unix / macOS / Windows (Powershell): `./gradlew wrapper --gradle-version <version> && ./gradlew wrapper`
-      - Windows (cmd.exe): `gradlew.bat wrapper --gradle-version <version> && gradlew.bat wrapper`
-    - This updates and regenerates the Gradle Wrapper scripts (`gradlew`, `gradlew.bat`, etc.) for the specified version.
-5. Update your source code:
-    - Adjust for Minecraft or Yarn mapping changes: method names, imports, mixins, etc.
-    - Check for Meteor Client API changes that may affect your addon by comparing against the
-      [master branch](https://github.com/MeteorDevelopment/meteor-client/tree/master).
-6. Build and test:
-    - Run the gradle `build` task.
-    - Confirm the build succeeds and your addon works with the new Minecraft version.
-
-### Project structure
-
-```text
-.
-│── .github
-│   ╰── workflows
-│       │── dev_build.yml
-│       ╰── pull_request.yml
-│── gradle
-│   │── libs.versions.toml
-│   ╰── wrapper
-│       │── gradle-wrapper.jar
-│       ╰── gradle-wrapper.properties
-│── src
-│   ╰── main
-│       │── java
-│       │   ╰── com
-│       │       ╰── example
-│       │           ╰── addon
-│       │               │── commands
-│       │               │   ╰── CommandExample
-│       │               │── hud
-│       │               │   │── HudExample
-│       │               │   ╰── StashHud
-│       │               │── modules
-│       │               │   ╰── stashorganizer
-│       │               ╰── AddonTemplate
-│       ╰── resources
-│           │── assets
-│           │   ╰── template
-│           │       ╰── icon.png
-│           │── addon-template.mixins.json
-│           ╰── fabric.mod.json
-│── .editorconfig
-│── .gitignore
-│── build.gradle.kts
-│── gradle.properties
-│── gradlew
-│── gradlew.bat
-│── LICENSE
-│── README.md
-╰── settings.gradle.kts
+```bash
+./gradlew build
 ```
 
-This is the default project structure. Each folder/file has a specific purpose.  
-Here is a brief explanation of the ones you might need to modify:
+The jar lands in `build/libs`.
 
-- `.github/workflows`: Contains the GitHub Actions configuration files.
-- `gradle`: Contains the Gradle wrapper files and the versions catalog.  
-  - `libs.versions.toml`: Defines version numbers for Minecraft, Loom, Meteor, and other dependencies.
-  - `wrapper`: Contains the Gradle wrapper executable files.  
-    To update the Gradle wrapper executable itself, run the wrapper update command (examples are shown above).
-- `src/main/java/com/example/addon`: Contains the main class of the addon.  
-  Here you can register your custom commands, modules, and HUDs.  
-  Edit the `getPackage` method to reflect the package of your addon.
-- `src/main/resources`: Contains the resources of the addon.
-    - `assets`: Contains the assets of the addon.  
-      You can add your own assets here, separated in subfolders.
-        - `template`: Contains the assets of the template.  
-          You can replace the `icon.png` file with your own addon icon.  
-          Also, rename this folder to reflect the name of your addon.
-    - `addon-template.mixins.json`: Contains the Mixin configuration for the addon.  
-      You can add your own mixins in the `client` array.
-    - `fabric.mod.json`: Contains the metadata of the addon.  
-      Edit the various fields to reflect the metadata of your addon.
-- `build.gradle.kts`: Contains the Gradle build script.  
-  You can manage the dependencies of the addon here.  
-  Remember to keep the `fabric-loom` version up-to-date.
-- `gradle.properties`: Contains additional build properties used by the build script
-  (for example `maven_group` and `archives_base_name`).  
-  Dependency and platform version numbers are stored in `gradle/libs.versions.toml`.
-- `LICENSE`: Contains the license of the addon.  
-  You can edit this file to change the license of your addon.
-- `README.md`: Contains the documentation of the addon.  
-  You can edit this file to reflect the documentation of your addon, and showcase its features.
+## Imported modules
+
+A dozen modules come from other Meteor addons and are distributed here under the GPL-3.0, with their authors credited:
+the Hyperglide travel suite (`fast-frame`, `overview`, `navigation`, `auto-pilot`, `elytra-tweaks`, `bounce-fly`,
+`control-fly`, `air-place`, `mining-tweaks`), `shulker-sorter`, `sign-history`, `trail-follower` and `chunk-radar`
+from HunterBuddy, and `AutoDyeShulkers` from BepHax. See `CREDITS.md` for the repositories, commits and the changes made.
+
+`ChunkRadar` and `TrailFollower` need [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap),
+[Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) and
+[XaeroPlus](https://modrinth.com/mod/xaeroplus) installed. Without them the addon still loads: those two modules are
+simply not registered and the rest of the addon works normally.
 
 ## License
 
-This template is available under the CC0 license. Feel free to use it for your own projects.
+GNU General Public License v3.0 or later, see `LICENSE`. Modules imported from other addons keep their original
+authorship; `CREDITS.md` lists them.

@@ -15,6 +15,11 @@ meteor = "1.21.11-SNAPSHOT"
 # Baritone (optional, compile only)
 baritone = "1.21.11-SNAPSHOT"
 
+# Xaero's (optional at runtime, compile only)
+xaeros-minimap = "fabric-1.21.11-25.3.10"
+xaeros-world-map = "fabric-1.21.11-1.40.11"
+xaeroplus = "2.30.8+fabric-1.21.11"
+
 # Tests
 junit = "5.11.3"
 
@@ -31,6 +36,11 @@ meteor-client = { module = "meteordevelopment:meteor-client", version.ref = "met
 
 # Baritone
 baritone = { module = "meteordevelopment:baritone", version.ref = "baritone" }
+
+# Xaero's
+xaeros-minimap = { module = "maven.modrinth:xaeros-minimap", version.ref = "xaeros-minimap" }
+xaeros-world-map = { module = "maven.modrinth:xaeros-world-map", version.ref = "xaeros-world-map" }
+xaeroplus = { module = "maven.modrinth:xaeroplus", version.ref = "xaeroplus" }
 
 # Tests
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }

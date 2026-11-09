@@ -1,10 +1,8 @@
 {
   "required": true,
-  "package": "com.example.addon.mixin",
+  "package": "com.pro0101.stashorganizer.mixins",
   "compatibilityLevel": "JAVA_21",
-  "client": [
-    "ExampleMixin"
-  ],
+  "client": ["ClientAccessor", "EntityAccessor", "EntityVelocityUpdateS2CPacketAccessor", "FireworkRocketEntityAccessor", "InputAccessor", "InteractionAccessor", "PlayerInventoryAccessor", "SignEditScreenAccessor"],
   "injectors": {
     "defaultRequire": 1
   }
