@@ -4,6 +4,10 @@ import com.mojang.logging.LogUtils;
 import com.pro0101.stashorganizer.hud.FlightHud;
 import com.pro0101.stashorganizer.hud.StashHud;
 import com.pro0101.stashorganizer.modules.bephax.AutoDyeShulkers;
+import com.pro0101.stashorganizer.modules.bephax.BetterStashFinder;
+import com.pro0101.stashorganizer.modules.bephax.ChestIndex;
+import com.pro0101.stashorganizer.modules.bephax.searcharea.SearchArea;
+import com.pro0101.stashorganizer.modules.bephax.StashBrander;
 import com.pro0101.stashorganizer.modules.huntbuddy.ElytraRecast;
 import com.pro0101.stashorganizer.modules.huntbuddy.Pitch40;
 import com.pro0101.stashorganizer.modules.huntbuddy.RocketBoost;
@@ -16,6 +20,8 @@ import com.pro0101.stashorganizer.modules.hyperglide.AutoPilot;
 import com.pro0101.stashorganizer.modules.hyperglide.BounceFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ControlFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ElytraTweaks;
+import com.pro0101.stashorganizer.modules.hyperglide.EasyAccess;
+import com.pro0101.stashorganizer.modules.hyperglide.FastPortal;
 import com.pro0101.stashorganizer.modules.hyperglide.FastFrame;
 import com.pro0101.stashorganizer.modules.hyperglide.MiningTweaks;
 import com.pro0101.stashorganizer.modules.hyperglide.Navigation;
@@ -62,6 +68,12 @@ public class StashOrganizerAddon extends MeteorAddon {
         Modules.get().add(new ElytraRecast());
         Modules.get().add(new RocketBoost());
         Modules.get().add(new AutoDyeShulkers());
+        Modules.get().add(new StashBrander());
+        Modules.get().add(new ChestIndex());
+        Modules.get().add(new BetterStashFinder());
+        Modules.get().add(new SearchArea());
+        Modules.get().add(new FastPortal());
+        Modules.get().add(new EasyAccess());
 
         // Built against Xaero's Minimap, World Map and XaeroPlus. Registered by name so their classes are never loaded
         // when those mods are missing, instead of failing to verify and taking the whole addon down with them.

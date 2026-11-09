@@ -31,3 +31,6 @@ bin/
 # fabric
 
 run/
+
+# Third-party addon sources, used only to port code. Never commit or push.
+.third-party/

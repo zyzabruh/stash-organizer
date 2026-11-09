@@ -6,6 +6,8 @@ License v3.0, keeps its original authorship, and is distributed here under the s
 | Module | Source | Author | Commit | License |
 |---|---|---|---|---|
 | `fast-frame` (`FastFrame`) | [Ark223/Hyperglide](https://github.com/Ark223/Hyperglide) | Ark223 | `68a6768` | GPL-3.0 |
+| `fast-portal` (`FastPortal`) | [Ark223/Hyperglide](https://github.com/Ark223/Hyperglide) | Ark223 | `68a6768` | GPL-3.0 |
+| `easy-access` (`EasyAccess`) | [Ark223/Hyperglide](https://github.com/Ark223/Hyperglide) | Ark223 | `68a6768` | GPL-3.0 |
 | `overview` (`Overview`) | [Ark223/Hyperglide](https://github.com/Ark223/Hyperglide) | Ark223 | `68a6768` | GPL-3.0 |
 | `navigation` (`Navigation`) | [Ark223/Hyperglide](https://github.com/Ark223/Hyperglide) | Ark223 | `68a6768` | GPL-3.0 |
 | `auto-pilot` (`AutoPilot`) | [Ark223/Hyperglide](https://github.com/Ark223/Hyperglide) | Ark223 | `68a6768` | GPL-3.0 |
@@ -20,6 +22,10 @@ License v3.0, keeps its original authorship, and is distributed here under the s
 | `chunk-radar` (`ChunkRadar`) | [Likon69/HunterBuddy](https://github.com/Likon69/HunterBuddy) | Likon69 | `4cae4b1` | GPL-3.0 |
 | `pitch-40` (`Pitch40`), `elytra-recast` (`ElytraRecast`), `rocket-boost` (`RocketBoost`) and their `recast` / `elytraboost` helpers | [Likon69/HunterBuddy](https://github.com/Likon69/HunterBuddy) | Likon69 | `4cae4b1` | GPL-3.0 |
 | `AutoDyeShulkers` | [FaxHack/BepHaxAddon](https://github.com/FaxHack/BepHaxAddon) | FaxHack, module by Tas `[0xTas]` | `d8a8c5f` | GPL-3.0 |
+| `stash-brander` (`StashBrander`) | [FaxHack/BepHaxAddon](https://github.com/FaxHack/BepHaxAddon) | FaxHack | `d8a8c5f` | GPL-3.0 |
+| `chest-index` (`ChestIndex`) | [FaxHack/BepHaxAddon](https://github.com/FaxHack/BepHaxAddon) | FaxHack | `d8a8c5f` | GPL-3.0 |
+| `better-stash-finder` (`BetterStashFinder`) | [FaxHack/BepHaxAddon](https://github.com/FaxHack/BepHaxAddon) | FaxHack | `d8a8c5f` | GPL-3.0 |
+| `search-area` (`SearchArea`) and its `searcharea` modes | [FaxHack/BepHaxAddon](https://github.com/FaxHack/BepHaxAddon) | FaxHack | `d8a8c5f` | GPL-3.0 |
 
 The rest of the addon (the Stash Organizer module and its planner, sorting, labelling, report and chest-placement
 code) is original work.

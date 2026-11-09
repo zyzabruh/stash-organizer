@@ -58,6 +58,8 @@ the Hyperglide travel suite (`fast-frame`, `overview`, `navigation`, `auto-pilot
 `control-fly`, `air-place`, `mining-tweaks`), `shulker-sorter`, `sign-history`, `trail-follower` and `chunk-radar`
 from HunterBuddy, and `AutoDyeShulkers` from BepHax. See `CREDITS.md` for the repositories, commits and the changes made.
 
+Later additions: `stash-brander`, `chest-index`, `better-stash-finder`, `search-area`, `fast-portal` and `easy-access`.
+
 `ChunkRadar` and `TrailFollower` need [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap),
 [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) and
 [XaeroPlus](https://modrinth.com/mod/xaeroplus) installed. Without them the addon still loads: those two modules are
