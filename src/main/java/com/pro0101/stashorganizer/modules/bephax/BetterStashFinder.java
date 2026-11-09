@@ -1,5 +1,7 @@
 package com.pro0101.stashorganizer.modules.bephax;
 
+import com.pro0101.stashorganizer.util.WebhookQueue;
+
 import com.pro0101.stashorganizer.StashOrganizerAddon;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
@@ -47,6 +49,8 @@ public class BetterStashFinder extends Module
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgWaypoints = settings.createGroup("Waypoints");
+    private final SettingGroup sgNotify = settings.createGroup("Notifications");
 
     public List<Chunk> chunks = new ArrayList<>();
 
@@ -89,7 +93,7 @@ public class BetterStashFinder extends Module
         .build()
     );
 
-    private final Setting<Boolean> saveToWaypoints = sgGeneral.add(new BoolSetting.Builder()
+    private final Setting<Boolean> saveToWaypoints = sgWaypoints.add(new BoolSetting.Builder()
         .name("save-to-waypoints")
         .description("Creates xaeros minimap waypoints for stash finds.")
         .defaultValue(false)
@@ -97,14 +101,14 @@ public class BetterStashFinder extends Module
         .build()
     );
 
-    private final Setting<Boolean> sendNotifications = sgGeneral.add(new BoolSetting.Builder()
+    private final Setting<Boolean> sendNotifications = sgNotify.add(new BoolSetting.Builder()
         .name("notifications")
         .description("Sends Minecraft notifications when new stashes are found.")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Mode> notificationMode = sgGeneral.add(new EnumSetting.Builder<Mode>()
+    private final Setting<Mode> notificationMode = sgNotify.add(new EnumSetting.Builder<Mode>()
         .name("notification-mode")
         .description("The mode to use for notifications.")
         .defaultValue(Mode.Both)
@@ -112,14 +116,14 @@ public class BetterStashFinder extends Module
         .build()
     );
 
-    private final Setting<Boolean> sendWebhook = sgGeneral.add(new BoolSetting.Builder()
+    private final Setting<Boolean> sendWebhook = sgNotify.add(new BoolSetting.Builder()
         .name("Send Webhook")
         .description("Sends a webhook when a stash is found.")
         .defaultValue(false)
         .build()
     );
 
-    public final Setting<String> webhookLink = sgGeneral.add(new StringSetting.Builder()
+    public final Setting<String> webhookLink = sgNotify.add(new StringSetting.Builder()
         .name("Webhook Link")
         .description("A discord webhook link. Looks like this: https://discord.com/api/webhooks/webhookUserId/webHookTokenOrSomething")
         .defaultValue("")
@@ -127,14 +131,14 @@ public class BetterStashFinder extends Module
         .build()
     );
 
-    public final Setting<Boolean> advancedLogging = sgGeneral.add(new BoolSetting.Builder()
+    public final Setting<Boolean> advancedLogging = sgNotify.add(new BoolSetting.Builder()
         .name("advanced-logging")
         .description("Will log more information, including the amount of each container found.")
         .defaultValue(false)
         .build()
     );
 
-    public final Setting<Boolean> ping = sgGeneral.add(new BoolSetting.Builder()
+    public final Setting<Boolean> ping = sgNotify.add(new BoolSetting.Builder()
         .name("Ping For Stash Finder")
         .description("Pings you for stash finder and base finder messages")
         .defaultValue(false)
@@ -142,13 +146,15 @@ public class BetterStashFinder extends Module
         .build()
     );
 
-    public final Setting<String> discordId = sgGeneral.add(new StringSetting.Builder()
+    public final Setting<String> discordId = sgNotify.add(new StringSetting.Builder()
         .name("Discord ID")
         .description("Your discord ID")
         .defaultValue("")
         .visible(() -> sendWebhook.get() && ping.get())
         .build()
     );
+
+    private Chunk lastFound;
 
     public BetterStashFinder()
     {
@@ -215,6 +221,7 @@ public class BetterStashFinder extends Module
             Chunk prevChunk = null;
             int i = chunks.indexOf(chunk);
 
+            lastFound = chunk;
             if (i < 0) chunks.add(chunk);
             else prevChunk = chunks.set(i, chunk);
 
@@ -282,12 +289,12 @@ public class BetterStashFinder extends Module
                             "]" +
                             "}]}";
 
-                        new Thread(() -> info(webhookLink.get(), json, ping.get() ? discordId.get() : null)).start();
+                        WebhookQueue.submit("stash-json", () -> info(webhookLink.get(), json, ping.get() ? discordId.get() : null));
                     }
                     else
                     {
                         String message = "Found stash at " + chunk.x + ", " + chunk.z + ".";
-                        new Thread(() -> info(webhookLink.get(), title, message, ping.get() ? discordId.get() : null, mc.getSession().getUsername())).start();
+                        WebhookQueue.submit("stash-summary", () -> info(webhookLink.get(), title, message, ping.get() ? discordId.get() : null, mc.getSession().getUsername()));
                     }
                 }
 
@@ -300,6 +307,16 @@ public class BetterStashFinder extends Module
                 }
             }
         }
+    }
+
+    public int stashCount() {
+        return chunks.size();
+    }
+
+    /** Coordinates of the last stash recorded, or null when none was seen yet. */
+    public String lastFound() {
+        if (lastFound == null) return null;
+        return lastFound.x + ", " + lastFound.z;
     }
 
     @Override
@@ -513,9 +530,8 @@ public class BetterStashFinder extends Module
             z,
             waypointName,
             "S",
-            color,
-            0,
-            false);
+            xaero.hud.minimap.waypoint.WaypointColor.fromIndex(color),
+            xaero.hud.minimap.waypoint.WaypointPurpose.NORMAL);
 
         waypointSet.add(waypoint);
     }

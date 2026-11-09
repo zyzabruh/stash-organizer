@@ -31,13 +31,16 @@ public class RocketFly extends Module {
    private boolean obstacleReturning;
    private float targetPitch = 0.0F;
    private final SettingGroup sgGeneral = this.settings.getDefaultGroup();
-   private final Setting<Integer> fireworkDelay = this.sgGeneral
+   private final SettingGroup sgTiming = this.settings.createGroup("Timing");
+   private final SettingGroup sgObstacles = this.settings.createGroup("Obstacles");
+   private final SettingGroup sgTakeoff = this.settings.createGroup("Takeoff");
+   private final Setting<Integer> fireworkDelay = sgTiming
       .add(
          new Builder().name("timed-delay").description("The delay between firework usages in milliseconds.").defaultValue(4000)
             .sliderRange(0, 10000)
             .build()
       );
-   private final Setting<Boolean> obstacleLookahead = this.sgGeneral
+   private final Setting<Boolean> obstacleLookahead = sgObstacles
       .add(
          new meteordevelopment.meteorclient.settings.BoolSetting.Builder()
             .name("obstacle-lookahead")
@@ -45,7 +48,7 @@ public class RocketFly extends Module {
             .defaultValue(true)
             .build()
       );
-   private final Setting<Integer> obstacleMargin = this.sgGeneral
+   private final Setting<Integer> obstacleMargin = sgObstacles
       .add(
          new Builder().name("obstacle-margin")
             .description("Height to keep above terrain ahead.")
@@ -55,7 +58,7 @@ public class RocketFly extends Module {
             .visible(this.obstacleLookahead::get)
             .build()
       );
-   private final Setting<Boolean> useManualY = this.sgGeneral
+   private final Setting<Boolean> useManualY = sgTiming
       .add(
          new meteordevelopment.meteorclient.settings.BoolSetting.Builder()
                      .name("use-manual-y-level")
@@ -63,7 +66,7 @@ public class RocketFly extends Module {
                .defaultValue(false)
             .build()
       );
-   private final Setting<Integer> manualYLevel = this.sgGeneral
+   private final Setting<Integer> manualYLevel = sgTiming
       .add(
          new Builder().name("manual-y-level")
                         .description("The Y level to maintain when using manual Y level.")
@@ -72,7 +75,7 @@ public class RocketFly extends Module {
                   .visible(this.useManualY::get)
                .onChanged(val -> this.yTarget = val.intValue()).build()
       );
-   private final Setting<Boolean> takeoffFromGround = this.sgGeneral
+   private final Setting<Boolean> takeoffFromGround = sgTakeoff
       .add(
          new meteordevelopment.meteorclient.settings.BoolSetting.Builder()
                      .name("takeoff-from-ground")
@@ -344,7 +347,7 @@ public class RocketFly extends Module {
       BlockPos.Mutable pos = new BlockPos.Mutable();
       for (int y = low; y <= end; y++) {
          BlockState state = this.mc.world.getBlockState(pos.set(x, y, z));
-         if (state.blocksMovement() || !state.getFluidState().isEmpty()) {
+         if (state.isSolidBlock(this.mc.world, pos) || !state.getFluidState().isEmpty()) {
             firstBlocking = y;
             break;
          }
@@ -378,7 +381,7 @@ public class RocketFly extends Module {
       air = 0;
       for (int y = firstBlocking + 1; y < top; y++) {
          BlockState state = this.mc.world.getBlockState(pos.set(x, y, z));
-         if (state.blocksMovement() || !state.getFluidState().isEmpty()) {
+         if (state.isSolidBlock(this.mc.world, pos) || !state.getFluidState().isEmpty()) {
             lastBlocking = y;
             air = 0;
          } else if (state.isAir()) {

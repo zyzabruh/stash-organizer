@@ -2959,8 +2959,8 @@ public class ChunkRadar extends Module {
         String ping = discordId.get().trim().matches("\\d+") ? discordId.get().trim() : null;
         String player = mc.player == null ? "unknown" : mc.player.getGameProfile().name();
 
-        new Thread(() -> com.pro0101.stashorganizer.modules.huntbuddy.util.Utils.sendWebhook(url, title, message, ping, player),
-            "ChunkRadar-Webhook").start();
+        com.pro0101.stashorganizer.util.WebhookQueue.submit("chunk-radar",
+            () -> com.pro0101.stashorganizer.modules.huntbuddy.util.Utils.sendWebhook(url, title, message, ping, player));
     }
 
     /**
@@ -3027,7 +3027,9 @@ public class ChunkRadar extends Module {
         if (set == null) return;
 
         dropWaypoint(dimension, name);
-        set.add(new Waypoint(blockX, 70, blockZ, name, symbol, color, 0, temporary));
+        Waypoint waypoint = new Waypoint(blockX, 70, blockZ, name, symbol, xaero.hud.minimap.waypoint.WaypointColor.fromIndex(color), xaero.hud.minimap.waypoint.WaypointPurpose.NORMAL);
+        waypoint.setTemporary(temporary);
+        set.add(waypoint);
         SupportMods.xaeroMinimap.requestWaypointsRefresh();
     }
 

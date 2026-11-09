@@ -3,7 +3,7 @@ package com.pro0101.stashorganizer.modules.bephax;
 import java.util.List;
 import com.pro0101.stashorganizer.StashOrganizerAddon;
 import net.minecraft.item.Item;
-import com.pro0101.stashorganizer.modules.bephax.util.MsgUtil;
+import com.pro0101.stashorganizer.modules.huntbuddy.util.MsgUtil;
 import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundEvents;
 import meteordevelopment.orbit.EventHandler;

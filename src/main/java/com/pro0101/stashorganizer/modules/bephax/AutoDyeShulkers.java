@@ -4,7 +4,7 @@ import com.pro0101.stashorganizer.StashOrganizerAddon;
 import net.minecraft.item.Item;
 import net.minecraft.text.Text;
 import net.minecraft.item.Items;
-import com.pro0101.stashorganizer.modules.bephax.util.MsgUtil;
+import com.pro0101.stashorganizer.modules.huntbuddy.util.MsgUtil;
 import net.minecraft.item.DyeItem;
 import net.minecraft.util.DyeColor;
 import net.minecraft.item.ItemStack;

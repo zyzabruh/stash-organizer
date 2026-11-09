@@ -50,6 +50,7 @@ import static meteordevelopment.meteorclient.utils.Utils.hasItems;
 public class ChestIndex extends Module
 {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgRender = settings.createGroup("Render");
 
     private final Setting<Integer> searchRange = sgGeneral.add(new IntSetting.Builder()
         .name("Range")
@@ -77,27 +78,27 @@ public class ChestIndex extends Module
         .build()
     );
 
-    private final Setting<Boolean> highlightSearched = sgGeneral.add(new BoolSetting.Builder()
+    private final Setting<Boolean> highlightSearched = sgRender.add(new BoolSetting.Builder()
         .name("Highlight Searched Blocks")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<ShapeMode> shapeMode = sgGeneral.add(new EnumSetting.Builder<ShapeMode>()
+    private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
         .name("Box Mode")
         .description("How the shape for the bounding box is rendered.")
         .defaultValue(ShapeMode.Both)
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("Side Color")
         .description("The side color of the bounding box.")
         .defaultValue(new SettingColor(16,106,144, 100))
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("Line Color")
         .description("The line color of the bounding box.")
         .defaultValue(new SettingColor(16,106,144, 255))
@@ -105,7 +106,9 @@ public class ChestIndex extends Module
     );
 
 
-    private HashSet<BlockPos> searched;
+    private static final int MAX_SEARCHED = 4096;
+
+    private final Set<BlockPos> searched = new LinkedHashSet<>();
 
     private HashMap<String, Integer> blocks;
 
@@ -118,8 +121,7 @@ public class ChestIndex extends Module
 
     public ChestIndex()
     {
-        super(StashOrganizerAddon.CATEGORY, "chest-index", "Displays a total count of blocks in your chests (buggy and will probably break for lots of chests)");
-        searched = new HashSet<BlockPos>();
+        super(StashOrganizerAddon.CATEGORY, "chest-index", "Counts every item in nearby containers and totals it by block type.");
         blocks = new HashMap<String, Integer>();
     }
 
@@ -168,7 +170,7 @@ public class ChestIndex extends Module
 
         WButton clearBlocks = list.add(theme.button("Clear Blocks")).widget();
         clearBlocks.action = () -> {
-            searched = new HashSet<>();
+            searched.clear();
             blocks = new HashMap<>();
         };
 
@@ -314,6 +316,38 @@ public class ChestIndex extends Module
         tickCounter = 0;
     }
 
+    /** Keeps the highlight set bounded: a long session in a big base must not grow it without limit. */
+    private void trimSearched() {
+        Iterator<BlockPos> it = searched.iterator();
+        while (searched.size() > MAX_SEARCHED && it.hasNext()) {
+            it.next();
+            it.remove();
+        }
+    }
+
+    public int distinctItems() {
+        return blocks.size();
+    }
+
+    public long totalItems() {
+        long total = 0;
+        for (int count : blocks.values()) total += count;
+        return total;
+    }
+
+    public List<Map.Entry<String, Integer>> topBlocks(int limit) {
+        if (limit <= 0 || blocks.isEmpty()) return List.of();
+        return sortBlocks().stream().limit(limit).toList();
+    }
+
+    @Override
+    public void onDeactivate() {
+        awaiting = false;
+        currPos = new BlockPos[2];
+        tickCounter = 0;
+        searched.clear();
+    }
+
     // only open new chest if awaiting = false;
     // after opening set awaiting to true
     // when inventory opened set awaiting to false;
@@ -355,7 +389,6 @@ public class ChestIndex extends Module
                     awaiting = true;
                     mc.player.swingHand(Hand.MAIN_HAND);
                     // find way to see when the interaction fails
-                    info("interacted");
                     currPos[0] = blockPos.toImmutable();
                     if (blockState.getBlock() == Blocks.CHEST || blockState.getBlock() == Blocks.TRAPPED_CHEST)
                     {
@@ -380,6 +413,7 @@ public class ChestIndex extends Module
         {
             if (blockPos != null) searched.add(blockPos);
         }
+        trimSearched();
         DefaultedList<Slot> slots = handler.slots;
         for (int i = 0; i < slots.size() - 36; i++)
         {

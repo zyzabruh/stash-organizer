@@ -1,5 +1,7 @@
 package com.pro0101.stashorganizer.modules.huntbuddy;
 
+import com.pro0101.stashorganizer.util.ModuleSettings;
+
 import baritone.api.BaritoneAPI;
 import baritone.api.pathing.goals.GoalXZ;
 import com.pro0101.stashorganizer.StashOrganizerAddon;
@@ -444,7 +446,7 @@ public class TrailFollower extends Module {
                             pitch40UtilModule.toggle();
                             this.pitch40ToggledByUs = true;
                             if (this.pitch40Firework.get()) {
-                                Setting<Boolean> setting = (Setting<Boolean>) pitch40UtilModule.settings.get("auto-firework");
+                                Setting<Boolean> setting = ModuleSettings.get(pitch40UtilModule, "auto-firework");
                                 if (setting != null) {
                                     this.info(
                                         "Pitch40 auto firework is on. Its speed threshold and firework delay are in the Pitch40 settings."
@@ -455,7 +457,7 @@ public class TrailFollower extends Module {
                                 }
                             }
 
-                            Setting<Boolean> autoBoundAdjustSetting = (Setting<Boolean>) pitch40UtilModule.settings.get("auto-bound-adjust");
+                            Setting<Boolean> autoBoundAdjustSetting = ModuleSettings.get(pitch40UtilModule, "auto-bound-adjust");
                             if (autoBoundAdjustSetting != null) {
                                 this.oldAutoBoundAdjustValue = autoBoundAdjustSetting.get();
                                 autoBoundAdjustSetting.set(false);
@@ -557,12 +559,12 @@ public class TrailFollower extends Module {
                     pitch40UtilModule.toggle();
                 }
 
-                Setting<Boolean> autoFireworkSetting = (Setting<Boolean>) pitch40UtilModule.settings.get("auto-firework");
+                Setting<Boolean> autoFireworkSetting = ModuleSettings.get(pitch40UtilModule, "auto-firework");
                 if (this.autoFireworkChangedByUs && autoFireworkSetting != null) {
                     autoFireworkSetting.set(this.oldAutoFireworkValue);
                 }
 
-                Setting<Boolean> autoBoundAdjustSetting = (Setting<Boolean>) pitch40UtilModule.settings.get("auto-bound-adjust");
+                Setting<Boolean> autoBoundAdjustSetting = ModuleSettings.get(pitch40UtilModule, "auto-bound-adjust");
                 if (autoBoundAdjustSetting != null) {
                     autoBoundAdjustSetting.set(this.oldAutoBoundAdjustValue);
                 }

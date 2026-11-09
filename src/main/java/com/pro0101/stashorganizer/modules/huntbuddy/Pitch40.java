@@ -1,5 +1,7 @@
 package com.pro0101.stashorganizer.modules.huntbuddy;
 
+import com.pro0101.stashorganizer.util.ModuleSettings;
+
 import com.pro0101.stashorganizer.StashOrganizerAddon;
 import com.pro0101.stashorganizer.modules.huntbuddy.util.RotationUtils;
 import com.pro0101.stashorganizer.modules.huntbuddy.util.Utils;
@@ -254,7 +256,7 @@ public class Pitch40 extends Module {
 
    private Setting<ElytraFlightModes> getElytraFlyMode() {
       if (this.elytraFlyMode == null) {
-         this.elytraFlyMode = (Setting<ElytraFlightModes>) this.getElytraFly().settings.get("mode");
+         this.elytraFlyMode = ModuleSettings.get(this.getElytraFly(), "mode");
       }
 
       return this.elytraFlyMode;
@@ -262,7 +264,7 @@ public class Pitch40 extends Module {
 
    private void syncLowerBoundsToElytraFly(Double value) {
       if (value != null && this.getElytraFly() != null) {
-         Setting<Double> elytraLower = (Setting<Double>) this.getElytraFly().settings.get("pitch40-lower-bounds");
+         Setting<Double> elytraLower = ModuleSettings.get(this.getElytraFly(), "pitch40-lower-bounds");
          if (elytraLower != null && !((Double)elytraLower.get()).equals(value)) {
             elytraLower.set(value);
          }
@@ -271,7 +273,7 @@ public class Pitch40 extends Module {
 
    private void syncUpperBoundsToElytraFly(Double value) {
       if (value != null && this.getElytraFly() != null) {
-         Setting<Double> elytraUpper = (Setting<Double>) this.getElytraFly().settings.get("pitch40-upper-bounds");
+         Setting<Double> elytraUpper = ModuleSettings.get(this.getElytraFly(), "pitch40-upper-bounds");
          if (elytraUpper != null && !((Double)elytraUpper.get()).equals(value)) {
             elytraUpper.set(value);
          }
@@ -280,7 +282,7 @@ public class Pitch40 extends Module {
 
    private void syncRotationSpeedUp(Double value) {
       if (value != null && this.getElytraFly() != null) {
-         Setting<Double> elytraRotationUp = (Setting<Double>) this.getElytraFly().settings.get("pitch40-rotation-speed-up");
+         Setting<Double> elytraRotationUp = ModuleSettings.get(this.getElytraFly(), "pitch40-rotation-speed-up");
          if (elytraRotationUp != null && !((Double)elytraRotationUp.get()).equals(value)) {
             elytraRotationUp.set(value);
          }
@@ -289,7 +291,7 @@ public class Pitch40 extends Module {
 
    private void syncRotationSpeedDown(Double value) {
       if (value != null && this.getElytraFly() != null) {
-         Setting<Double> elytraRotationDown = (Setting<Double>) this.getElytraFly().settings.get("pitch40-rotation-speed-down");
+         Setting<Double> elytraRotationDown = ModuleSettings.get(this.getElytraFly(), "pitch40-rotation-speed-down");
          if (elytraRotationDown != null && !((Double)elytraRotationDown.get()).equals(value)) {
             elytraRotationDown.set(value);
          }
