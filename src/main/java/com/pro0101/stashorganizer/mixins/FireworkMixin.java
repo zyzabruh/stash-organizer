@@ -1,22 +1,30 @@
 package com.pro0101.stashorganizer.mixins;
 
+import com.pro0101.stashorganizer.modules.huntbuddy.RocketBoost;
+import com.pro0101.stashorganizer.modules.huntbuddy.elytraboost.FireworkBoostTracker;
+import com.pro0101.stashorganizer.modules.hyperglide.BoostBounds;
 import com.pro0101.stashorganizer.modules.hyperglide.ControlFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ElytraTweaks;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
+import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Lets the flight modules follow the fireworks the player launches.
  *
  * <p>Boost timing depends on the rocket that belongs to the local player: the modules watch it to know when the
- * acceleration starts and when the rocket expires, which is not visible from the item use alone.
+ * acceleration starts, how long it lasts, and when it expires. Rocket Boost additionally replaces the vanilla boost
+ * speed and keeps its rocket alive until the boost window is over.
  */
 @Mixin(FireworkRocketEntity.class)
 public abstract class FireworkMixin {
@@ -44,5 +52,58 @@ public abstract class FireworkMixin {
         if (tweaks != null && tweaks.isActive()) {
             tweaks.track(rocket);
         }
+
+        if (!client.player.isGliding()) return;
+        FireworkBoostTracker.mark();
+
+        RocketBoost boost = Modules.get().get(RocketBoost.class);
+        if (boost != null && boost.isActive()) {
+            boost.setTrackedRocket(rocket.getId());
+        }
+    }
+    /**
+     * Replaces the velocity the rocket pushes the player with.
+     *
+     * <p>This is the override the reported bypass relies on: the boost is applied at the measured bound instead of the
+     * raw rocket velocity, so the motion the player flies is the one the envelope allows.
+     *
+     * @param entity entity receiving the boost
+     * @param velocity velocity computed by the rocket
+     */
+    @Redirect(method = "tick", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/entity/LivingEntity;setVelocity(Lnet/minecraft/util/math/Vec3d;)V"
+    ))
+    private void stashorganizer$override(LivingEntity entity, Vec3d velocity) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null || entity != client.player) {
+            entity.setVelocity(velocity);
+            return;
+        }
+
+        BoostBounds bounds = Modules.get().get(BoostBounds.class);
+        if (bounds == null || !bounds.isActive()) {
+            entity.setVelocity(velocity);
+            return;
+        }
+
+        entity.setVelocity(bounds.override(velocity));
+    }
+
+
+    /**
+     * Replaces the vanilla boost speed while Rocket Boost is active.
+     *
+     * @param original vanilla speed constant
+     * @return configured boost speed
+     */
+    @ModifyConstant(method = "tick", constant = @Constant(doubleValue = 1.5))
+    private double stashorganizer$speed(double original) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null || this.shooter != client.player) return original;
+
+        RocketBoost boost = Modules.get().get(RocketBoost.class);
+        if (boost == null || !boost.isActive()) return original;
+
+        return boost.getSpeed();
     }
 }
