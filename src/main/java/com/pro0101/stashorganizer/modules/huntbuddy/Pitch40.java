@@ -236,7 +236,7 @@ public class Pitch40 extends Module {
    private String chestSwapWaitReason = null;
 
    public Pitch40() {
-      super(StashOrganizerAddon.CATEGORY, "Pitch40", "Utility for Pitch40 elytra flying. Syncs bounds with ElytraFly and auto-enables on reconnect.");
+      super(StashOrganizerAddon.CATEGORY, "pitch-40", "Elytra flight mode: bounds synced with ElytraFly, auto firework, auto recast, chest swap. Uses rocket-boost and elytra-recast.");
    }
 
    /** Which half of the cycle the flight is in right now. Read by the Pitch40Cycle HUD. */

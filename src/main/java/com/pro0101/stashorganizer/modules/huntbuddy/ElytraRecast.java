@@ -50,8 +50,8 @@ public class ElytraRecast extends Module {
     public ElytraRecast() {
         super(
             StashOrganizerAddon.CATEGORY,
-            "ElytraRecast",
-            "Flight recovery fallback that monitors and recovers when you stop flying or drop too low."
+            "elytra-recast",
+            "Recovery fallback for pitch-40: recasts when the glide ends or drops too low, following its bounds."
         );
     }
 

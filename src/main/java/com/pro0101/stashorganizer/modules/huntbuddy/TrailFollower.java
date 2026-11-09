@@ -379,7 +379,7 @@ public class TrailFollower extends Module {
     Vec3d posDebug;
 
     public TrailFollower() {
-        super(StashOrganizerAddon.CATEGORY, "TrailFollower", "Automatically follows trails in all dimensions.");
+        super(StashOrganizerAddon.CATEGORY, "trail-follower", "Follows trails in every dimension; in the overworld it drives pitch-40 or rocket-fly.");
     }
 
     public float headingYaw() { return (float) (followingTrail ? heading.steady() : targetYaw); }
@@ -924,7 +924,7 @@ public class TrailFollower extends Module {
         if (!this.webhookLink.get().isEmpty()) {
             String link = this.webhookLink.get();
             String sender = this.mc.player.getGameProfile().name();
-            meteordevelopment.meteorclient.utils.network.MeteorExecutor.execute(() -> Utils.sendWebhook(link, "TrailFollower", message, null, sender));
+            meteordevelopment.meteorclient.utils.network.MeteorExecutor.execute(() -> Utils.sendWebhook(link, "trail-follower", message, null, sender));
         }
     }
 

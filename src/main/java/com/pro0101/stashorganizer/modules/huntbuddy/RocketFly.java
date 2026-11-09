@@ -123,7 +123,7 @@ public class RocketFly extends Module {
    private static final int TAKEOFF_TIMEOUT_TICKS = 280;
 
    public RocketFly() {
-      super(StashOrganizerAddon.CATEGORY, "RocketFly", "Maintains a level Y-flight with fireworks and smooth pitch control.");
+      super(StashOrganizerAddon.CATEGORY, "rocket-fly", "Rocket engine for level flight: timed fireworks, obstacle lookahead and optional manual Y. Driven by the trail-follower ROCKETS mode.");
    }
 
    public void onActivate() {

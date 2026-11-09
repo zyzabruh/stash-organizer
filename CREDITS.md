@@ -18,7 +18,7 @@ License v3.0, keeps its original authorship, and is distributed here under the s
 | `sign-history` (`SignHistory`) and its `signs` support package | [Likon69/HunterBuddy](https://github.com/Likon69/HunterBuddy) | Likon69 | `4cae4b1` | GPL-3.0 |
 | `trail-follower` (`TrailFollower`) | [Likon69/HunterBuddy](https://github.com/Likon69/HunterBuddy) | Likon69 | `4cae4b1` | GPL-3.0 |
 | `chunk-radar` (`ChunkRadar`) | [Likon69/HunterBuddy](https://github.com/Likon69/HunterBuddy) | Likon69 | `4cae4b1` | GPL-3.0 |
-| `Pitch40`, `ElytraRecast`, `RocketBoost` and their `recast` / `elytraboost` helpers | [Likon69/HunterBuddy](https://github.com/Likon69/HunterBuddy) | Likon69 | `4cae4b1` | GPL-3.0 |
+| `pitch-40` (`Pitch40`), `elytra-recast` (`ElytraRecast`), `rocket-boost` (`RocketBoost`) and their `recast` / `elytraboost` helpers | [Likon69/HunterBuddy](https://github.com/Likon69/HunterBuddy) | Likon69 | `4cae4b1` | GPL-3.0 |
 | `AutoDyeShulkers` | [FaxHack/BepHaxAddon](https://github.com/FaxHack/BepHaxAddon) | FaxHack, module by Tas `[0xTas]` | `d8a8c5f` | GPL-3.0 |
 
 The rest of the addon (the Stash Organizer module and its planner, sorting, labelling, report and chest-placement

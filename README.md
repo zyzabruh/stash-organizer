@@ -63,6 +63,9 @@ from HunterBuddy, and `AutoDyeShulkers` from BepHax. See `CREDITS.md` for the re
 [XaeroPlus](https://modrinth.com/mod/xaeroplus) installed. Without them the addon still loads: those two modules are
 simply not registered and the rest of the addon works normally.
 
+Two HUD elements live in the `Stash` group: `stash-organizer`, and `flight-status`, which lists the running flight
+modules with the `pitch-40` bounds and the `trail-follower` mode so that chain is not invisible.
+
 ## License
 
 GNU General Public License v3.0 or later, see `LICENSE`. Modules imported from other addons keep their original

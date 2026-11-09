@@ -659,7 +659,7 @@ public class RocketBoost extends Module {
    public final List<Packet<?>> pongQueue = new ArrayList<>();
 
    public RocketBoost() {
-      super(StashOrganizerAddon.CATEGORY, "rocket-boost", "Approach A: cancel destroy + queue pongs (Grim-aware, 800ms default).");
+      super(StashOrganizerAddon.CATEGORY, "rocket-boost", "Packet-level boost engine (Grim-aware) that pitch-40 turns on; not a flight mode on its own.");
    }
 
    @Override
