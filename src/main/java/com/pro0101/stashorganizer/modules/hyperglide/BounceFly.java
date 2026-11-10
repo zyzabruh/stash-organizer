@@ -1,6 +1,7 @@
 package com.pro0101.stashorganizer.modules.hyperglide;
 
 import com.pro0101.stashorganizer.StashOrganizerAddon;
+import com.pro0101.stashorganizer.modules.huntbuddy.util.GlideClearHold;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Baritone;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Client;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Elytra;
@@ -18,8 +19,15 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityPosition;
 import net.minecraft.entity.EntityType;
+import net.minecraft.network.ClientConnection;
+import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -29,7 +37,9 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class BounceFly extends Module {
     private static final double ticks = 20.0;
@@ -52,6 +62,8 @@ public class BounceFly extends Module {
 
     private static final double hazardWidth = 4.0;
     private static final double hazardHeight = 6.0;
+
+    private static final double rollbackDistance = 0.25;
 
     private static final Set<EntityType<?>> hazards = Set.of(
         EntityType.TNT, EntityType.END_CRYSTAL, EntityType.WARDEN,
@@ -166,6 +178,71 @@ public class BounceFly extends Module {
         .build()
     );
 
+    private final Setting<Boolean> holdClear = this.general.add(new BoolSetting.Builder()
+        .name("hold-glide-clear")
+        .description("Answers the server's pings itself and holds a glide clear until the first tick the re-deploy is free, instead of letting vanilla apply it the moment it arrives. It hides a server decision from the server: on a server that logs metadata, it is visible.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Integer> clearCap = this.general.add(new IntSetting.Builder()
+        .name("clear-hold-cap")
+        .description("Ticks a held clear waits for a free re-deploy tick before being applied anyway, so a clear behind an obstacle pass or a stuck bounce cannot sit in a frozen transaction indefinitely.")
+        .defaultValue(10)
+        .min(2)
+        .sliderMax(20)
+        .visible(this.holdClear::get)
+        .build()
+    );
+
+    private final Setting<Boolean> walkBack = this.general.add(new BoolSetting.Builder()
+        .name("setback-walk")
+        .description("Walks a few blocks with Baritone after the server rolls you back, then bounces again from there. Bouncing from the spot the server just rejected asks for the same correction twice. Needs obstacle-passer, which owns the Baritone pass.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> walkDistance = this.general.add(new IntSetting.Builder()
+        .name("setback-distance")
+        .description("How many blocks the setback walk covers before bouncing resumes.")
+        .defaultValue(3)
+        .min(1)
+        .sliderRange(1, 16)
+        .visible(this.walkBack::get)
+        .build()
+    );
+
+    private final Setting<Boolean> fakeLag = this.general.add(new BoolSetting.Builder()
+        .name("fake-lag")
+        .description("Holds outgoing movement while skimming the floor and releases it in bursts. The server sees one position every few ticks instead of one per tick; the client keeps moving at full speed meanwhile. Off by default: it is a desync by design.")
+        .defaultValue(false)
+        .onChanged(value -> {
+            if (!value) this.flush();
+        })
+        .build()
+    );
+
+    private final Setting<Integer> lagFlush = this.general.add(new IntSetting.Builder()
+        .name("fake-lag-flush-ticks")
+        .description("How many ticks outgoing movement is held before it is released in a burst.")
+        .defaultValue(10)
+        .min(2)
+        .sliderRange(2, 40)
+        .visible(this.fakeLag::get)
+        .build()
+    );
+
+    private final Setting<Double> lagHeight = this.general.add(new DoubleSetting.Builder()
+        .name("fake-lag-height")
+        .description("How close to the floor the player has to be gliding for the hold to apply. The burst only matters while skimming, which is where a bounce spends its hop.")
+        .defaultValue(0.163)
+        .min(0.05)
+        .sliderMax(4.0)
+        .decimalPlaces(3)
+        .visible(this.fakeLag::get)
+        .build()
+    );
+
     private final Setting<Boolean> freelook = this.general.add(new BoolSetting.Builder()
         .name("freelook")
         .description("Keeps the camera on its own rotation while the module steers the player. Meteor's freecam cannot do this here: it derives its angle from the player rotation, which this module rewrites every tick.")
@@ -197,6 +274,15 @@ public class BounceFly extends Module {
     private boolean wasGliding;
     private boolean force;
     private int pause;
+
+    private final Queue<Packet<?>> queue = new ConcurrentLinkedQueue<>();
+    private boolean flushing;
+    private int lagTicks;
+    private double groundY;
+    private int pressAge;
+    private boolean held;
+
+    private int rollbacks;
 
     private float viewYaw;
     private float viewPitch;
@@ -239,6 +325,22 @@ public class BounceFly extends Module {
         this.wasGliding = false;
         this.force = false;
         this.pause = 0;
+
+        this.pressAge = 0;
+        this.held = false;
+        this.lagTicks = 0;
+        this.rollbacks = 0;
+        this.groundY = this.mc.player.getY();
+    }
+
+    /**
+     * Reports how many times the server has rolled the player back since activation.
+     *
+     * @return rollback count, or null when there has been none
+     */
+    @Override
+    public String getInfoString() {
+        return this.rollbacks == 0 ? null : "rollbacks: " + this.rollbacks;
     }
 
     /**
@@ -263,6 +365,13 @@ public class BounceFly extends Module {
         this.wasGliding = false;
         this.force = false;
         this.pause = 0;
+
+        this.pressAge = 0;
+        this.held = false;
+        this.lagTicks = 0;
+
+        GlideClearHold.release(this);
+        this.flush();
     }
 
     //region Event handlers
@@ -277,6 +386,9 @@ public class BounceFly extends Module {
         if (!Client.ready()) return;
 
         this.camera(this.freelook.get());
+
+        this.serviceClear();
+        this.serviceLag();
 
         if (!this.available()) return;
 
@@ -305,6 +417,12 @@ public class BounceFly extends Module {
         this.launch(vel);
         this.mc.player.setSprinting(true);
 
+        if (this.launch && !this.held) {
+            this.pressAge = this.mc.player.age;
+        }
+
+        this.held = this.launch;
+
         if (!this.takeoff()) return;
         if (this.blocked()) return;
 
@@ -322,9 +440,131 @@ public class BounceFly extends Module {
     @EventHandler
     private void onReceive(PacketEvent.Receive event) {
         if (!this.isActive()) return;
-        if (!(event.packet instanceof PlayerPositionLookS2CPacket)) return;
 
-        this.mc.execute(this::setback);
+        if (event.packet instanceof PlayerPositionLookS2CPacket packet) {
+            if (!this.rollback(packet)) return;
+
+            GlideClearHold.release(this);
+            this.mc.execute(this::setback);
+            return;
+        }
+
+        // A ping that arrives behind a held clear has to be answered from here: the clear is only
+        // applied on a free tick, and the connection stalls behind whatever answer comes last.
+        GlideClearHold.intake(this, event);
+    }
+
+    /**
+     * Queues outgoing movement while fake lag is on.
+     *
+     * <p>Only movement, actions and client commands are held. Chat, commands, inventory and
+     * interactions go out as they arrive, so a burst can never swallow something the player typed
+     * or a click that changes the inventory.
+     *
+     * @param event packet send event
+     */
+    @EventHandler
+    private void onSend(PacketEvent.Send event) {
+        if (this.flushing) return;
+        if (!this.holding()) return;
+
+        if (!(event.packet instanceof PlayerMoveC2SPacket)
+            && !(event.packet instanceof PlayerActionC2SPacket)
+            && !(event.packet instanceof ClientCommandC2SPacket)) {
+            return;
+        }
+
+        this.queue.add(event.packet);
+        event.cancel();
+    }
+
+    //endregion
+
+    //region Network emulation
+
+    /**
+     * Releases a held glide clear on the first tick the re-deploy is free.
+     *
+     * <p>Applying the clear on the tick the jump is pressed costs the whole hop; applying it on a
+     * tick where nothing is pressed costs nothing, because the takeoff that follows is a fresh
+     * press anyway. The hold is capped so a clear cannot outlive an obstacle pass.
+     */
+    private void serviceClear() {
+        if (!this.holdClear.get() || !this.enabled()) {
+            GlideClearHold.release(this);
+            return;
+        }
+
+        if (!GlideClearHold.claim(this)) return;
+
+        if (!GlideClearHold.holding()) {
+            GlideClearHold.answerPings();
+            return;
+        }
+
+        long age = this.mc.player.age;
+        boolean free = !this.mc.player.isOnGround()
+            && age > this.pressAge && !this.held;
+
+        if (free || age - GlideClearHold.heldSince() >= this.clearCap.get()) {
+            GlideClearHold.release(this);
+
+            this.force = true;
+            this.wasGliding = false;
+        }
+    }
+
+    /**
+     * Holds outgoing movement while skimming the floor and releases it in bursts.
+     */
+    private void serviceLag() {
+        if (this.mc.player.isOnGround()) {
+            this.groundY = this.mc.player.getY();
+        }
+
+        if (!this.holding()) {
+            this.lagTicks = 0;
+            this.flush();
+        } else if (++this.lagTicks >= this.lagFlush.get()) {
+            this.lagTicks = 0;
+            this.flush();
+        }
+    }
+
+    /**
+     * Checks whether outgoing movement is being held back.
+     *
+     * @return true while fake lag applies
+     */
+    private boolean holding() {
+        return this.fakeLag.get() && this.isActive() && this.enabled()
+            && this.mc.player != null && this.mc.player.isGliding()
+            && this.mc.player.getY() - this.groundY < this.lagHeight.get();
+    }
+
+    /**
+     * Sends everything fake lag is holding.
+     */
+    private void flush() {
+        if (this.queue.isEmpty()) return;
+
+        if (this.mc.getNetworkHandler() == null) {
+            this.queue.clear();
+            return;
+        }
+
+        this.flushing = true;
+
+        try {
+            ClientConnection connection = this.mc.getNetworkHandler().getConnection();
+            Packet<?> packet;
+
+            while ((packet = this.queue.poll()) != null) {
+                connection.send(packet, null, true);
+            }
+        } finally {
+            this.flushing = false;
+        }
     }
 
     //endregion
@@ -517,14 +757,58 @@ public class BounceFly extends Module {
     private void setback() {
         if (!Client.ready()) return;
 
+        this.flush();
         this.release();
         this.reset();
 
         this.wasGliding = false;
         this.started = false;
         this.pause = this.setbackPause.get();
+        this.rollbacks++;
 
         this.mc.player.stopGliding();
+
+        if (!this.walkBack.get() || !this.passer.get()) return;
+
+        // The bounce would otherwise restart from the exact spot the server just disagreed with,
+        // which asks for the same correction again. A short walk moves the client off that spot
+        // and gets both sides agreeing before the next hop is taken.
+        this.level = this.level();
+
+        BlockPos goal = this.base().add(
+            this.dx * this.walkDistance.get(), 0, this.dz * this.walkDistance.get()
+        );
+
+        this.pause = 0;
+        this.walk(this.safe(goal));
+    }
+
+    /**
+     * Checks whether a position packet actually moved the player.
+     *
+     * <p>The server sends the same packet for plain resyncs, which agree with where the client
+     * already is and are not rollbacks. Axes flagged relative carry a delta rather than a
+     * destination, so they are read as one.
+     *
+     * @param packet position packet
+     * @return true when the packet moved the player
+     */
+    private boolean rollback(PlayerPositionLookS2CPacket packet) {
+        if (this.mc.player == null) return true;
+
+        EntityPosition change = packet.change();
+        Set<PositionFlag> relatives = packet.relatives();
+        Vec3d target = change.position();
+        Vec3d current = this.mc.player.getEntityPos();
+
+        double dx = relatives.contains(PositionFlag.X)
+            ? target.x : target.x - current.x;
+        double dy = relatives.contains(PositionFlag.Y)
+            ? target.y : target.y - current.y;
+        double dz = relatives.contains(PositionFlag.Z)
+            ? target.z : target.z - current.z;
+
+        return dx * dx + dy * dy + dz * dz > rollbackDistance;
     }
 
     //endregion
@@ -665,6 +949,7 @@ public class BounceFly extends Module {
 
         if (nearest == null) return false;
 
+        this.flush();
         this.release();
         this.reset();
 
@@ -706,6 +991,22 @@ public class BounceFly extends Module {
     private void path(BlockPos pos) {
         this.level = this.level();
 
+        int px = this.dx * reach;
+        int pz = this.dz * reach;
+
+        pos = this.block(pos.getX(), pos.getZ());
+        this.walk(this.safe(pos.add(px, 0, pz)));
+    }
+
+    /**
+     * Hands a position to Baritone and holds the bounce until the walk is done.
+     *
+     * <p>{@code pathing()} keeps the inputs released while Baritone owns the movement and sets
+     * {@code started} again once the walk ends, so the bounce resumes without a special case.
+     *
+     * @param pos goal to walk to
+     */
+    private void walk(BlockPos pos) {
         this.release();
         this.reset();
         this.clear();
@@ -714,12 +1015,6 @@ public class BounceFly extends Module {
         this.passWait = 0;
         this.started = false;
         this.wasGliding = false;
-
-        int px = this.dx * reach;
-        int pz = this.dz * reach;
-
-        pos = this.block(pos.getX(), pos.getZ());
-        pos = this.safe(pos.add(px, 0, pz));
 
         Baritone.walk(pos);
     }
