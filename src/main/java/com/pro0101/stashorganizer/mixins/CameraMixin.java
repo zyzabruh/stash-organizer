@@ -1,5 +1,6 @@
 package com.pro0101.stashorganizer.mixins;
 
+import com.pro0101.stashorganizer.modules.hyperglide.BounceFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ControlFly;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.render.Camera;
@@ -26,9 +27,16 @@ public abstract class CameraMixin {
     ))
     private void stashorganizer$rotate(Args args) {
         ControlFly module = Modules.get().get(ControlFly.class);
-        if (module == null || !module.camera()) return;
+        if (module != null && module.camera()) {
+            args.set(0, module.yaw());
+            args.set(1, module.pitch());
+            return;
+        }
 
-        args.set(0, module.yaw());
-        args.set(1, module.pitch());
+        BounceFly bounce = Modules.get().get(BounceFly.class);
+        if (bounce == null || !bounce.camera()) return;
+
+        args.set(0, bounce.yaw());
+        args.set(1, bounce.pitch());
     }
 }

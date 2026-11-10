@@ -108,6 +108,13 @@ public class BounceFly extends Module {
         .build()
     );
 
+    private final Setting<Boolean> freelook = this.general.add(new BoolSetting.Builder()
+        .name("freelook")
+        .description("Keeps the camera on its own rotation while the module steers the player. Meteor's freecam cannot do this here: it derives its angle from the player rotation, which this module rewrites every tick.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Deque<BlockPos> blocks = new ArrayDeque<>();
 
     private MiningTweaks mining;
@@ -128,6 +135,10 @@ public class BounceFly extends Module {
     private boolean enabled;
     private boolean started;
 
+    private float viewYaw;
+    private float viewPitch;
+    private boolean viewActive;
+
     public BounceFly() {
         super(StashOrganizerAddon.CATEGORY, "bounce-fly",
             "Enables elytra bouncing for fast highway travel."
@@ -143,6 +154,10 @@ public class BounceFly extends Module {
 
         this.face();
         this.center();
+
+        this.viewYaw = this.mc.player.getYaw();
+        this.viewPitch = this.mc.player.getPitch();
+        this.viewActive = false;
 
         this.level = this.level();
         this.reset();
@@ -176,6 +191,7 @@ public class BounceFly extends Module {
         this.pass = false;
         this.enabled = false;
         this.started = false;
+        this.viewActive = false;
     }
 
     //region Event handlers
@@ -187,9 +203,11 @@ public class BounceFly extends Module {
      */
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (!Client.ready() || !this.available()) {
-            return;
-        }
+        if (!Client.ready()) return;
+
+        this.camera(this.freelook.get());
+
+        if (!this.available()) return;
 
         if (!Baritone.pathing()) this.rotate();
         Vec3d vel = this.mc.player.getVelocity();
@@ -776,6 +794,76 @@ public class BounceFly extends Module {
      */
     private void rotate() {
         Player.rotate((float) this.yaw);
+    }
+
+    /**
+     * Enables or disables the independent camera rotation.
+     *
+     * <p>The first enabled tick copies the player angle, so turning the setting on does not snap the view; after that
+     * the camera keeps whatever the mouse gives it.
+     *
+     * @param enabled whether the camera may look away from the flight direction
+     */
+    private void camera(boolean enabled) {
+        if (!enabled) {
+            this.viewActive = false;
+            return;
+        }
+
+        if (this.viewActive) return;
+
+        this.viewYaw = this.mc.player.getYaw();
+        this.viewPitch = this.mc.player.getPitch();
+        this.viewActive = true;
+    }
+
+    /**
+     * Checks whether mouse look belongs to the camera instead of the player.
+     *
+     * @return true when look input must be routed to {@link #look(double, double)}
+     */
+    public boolean view() {
+        return this.isActive() && this.mc.player != null && this.freelook.get();
+    }
+
+    /**
+     * Checks whether the custom camera rotation should be applied.
+     *
+     * @return true when the camera owns its rotation
+     */
+    public boolean camera() {
+        return this.isActive() && this.mc.player != null && this.viewActive;
+    }
+
+    /**
+     * Returns the independent camera yaw.
+     *
+     * @return camera yaw
+     */
+    public float yaw() {
+        return this.viewActive ? this.viewYaw : this.mc.player.getYaw();
+    }
+
+    /**
+     * Returns the independent camera pitch.
+     *
+     * @return camera pitch
+     */
+    public float pitch() {
+        return this.viewActive ? this.viewPitch : this.mc.player.getPitch();
+    }
+
+    /**
+     * Applies mouse movement to the independent camera rotation.
+     *
+     * @param mx horizontal mouse movement
+     * @param my vertical mouse movement
+     */
+    public void look(double mx, double my) {
+        this.viewYaw += (float) (mx * 0.15);
+        this.viewPitch = MathHelper.clamp(
+            this.viewPitch + (float) (my * 0.15), -90.0F, 90.0F
+        );
     }
 
     /**

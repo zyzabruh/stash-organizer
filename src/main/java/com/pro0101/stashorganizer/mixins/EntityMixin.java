@@ -1,5 +1,6 @@
 package com.pro0101.stashorganizer.mixins;
 
+import com.pro0101.stashorganizer.modules.hyperglide.BounceFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ControlFly;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.MinecraftClient;
@@ -30,9 +31,18 @@ public abstract class EntityMixin {
         if ((Object) this != client.player) return;
 
         ControlFly module = Modules.get().get(ControlFly.class);
-        if (module == null || !module.view()) return;
+        if (module != null && module.view()) {
+            module.look(px, py);
+            info.cancel();
+            return;
+        }
 
-        module.look(px, py);
+        // Bounce Fly rewrites the player rotation every tick, so it needs the same treatment when its
+        // freelook is on: the look input has to move the camera, not the highway heading.
+        BounceFly bounce = Modules.get().get(BounceFly.class);
+        if (bounce == null || !bounce.view()) return;
+
+        bounce.look(px, py);
         info.cancel();
     }
 }
