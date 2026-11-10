@@ -382,6 +382,16 @@ public class ElytraTweaks extends Module {
     //region State management
 
     /**
+     * Reads the automatic elytra deployment setting, so a module that forces it on can put the
+     * player's own value back when it is done.
+     *
+     * @return whether automatic deployment is currently on
+     */
+    public boolean autoDeploy() {
+        return this.deploy.get();
+    }
+
+    /**
      * Changes automatic elytra deployment for Baritone.
      *
      * @param active requested auto deploy state
@@ -744,20 +754,19 @@ public class ElytraTweaks extends Module {
     private void strict() {
         if (!Inventory.ready()) return;
 
+        // Only move on when the click was actually sent: advancing a phase on a click that never
+        // happened leaves the swap half done with no way back to it.
         switch (this.phase) {
             case 1 -> {
-                this.click(Inventory.slot(this.slot));
-                this.phase = 2;
+                if (this.click(Inventory.slot(this.slot))) this.phase = 2;
             }
 
             case 2 -> {
-                this.click(chest);
-                this.phase = 3;
+                if (this.click(chest)) this.phase = 3;
             }
 
             case 3 -> {
-                this.click(Inventory.slot(this.slot));
-                this.phase = 4;
+                if (this.click(Inventory.slot(this.slot))) this.phase = 4;
             }
 
             case 4 -> this.finish();
@@ -795,11 +804,15 @@ public class ElytraTweaks extends Module {
      * Performs a normal click in the player inventory.
      *
      * @param slot player screen slot to click
+     * @return true when the click was sent
      */
-    private void click(int slot) {
-        if (this.mc.interactionManager != null) {
-            Inventory.pick(slot);
+    private boolean click(int slot) {
+        if (this.mc.interactionManager == null) {
+            return false;
         }
+
+        Inventory.pick(slot);
+        return true;
     }
 
     /**
@@ -825,6 +838,14 @@ public class ElytraTweaks extends Module {
         }
 
         if (!Inventory.ready()) {
+            // Disabling the module is not a reason to open a screen: there are no ticks left to
+            // finish the swap in, so say what was left behind instead of leaving a GUI open.
+            if (!this.isActive()) {
+                this.warning("elytra swap abandoned: the inventory was closed before it finished");
+                this.finish();
+                return;
+            }
+
             this.opened = true;
             this.mc.setScreen(new InventoryScreen(this.mc.player));
         }

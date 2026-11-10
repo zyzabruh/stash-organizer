@@ -66,6 +66,24 @@ public class AutoPilot extends Module {
     private boolean enabled;
     private boolean emergency;
 
+    /** True once activation got past its checks, so deactivation only undoes what this flight did. */
+    private boolean started;
+
+    /** Module and setting states from before activation, put back by {@link #restore()}. */
+    private boolean miningBefore;
+    private boolean navigationBefore;
+    private boolean tweaksBefore;
+    private boolean deployBefore;
+    private boolean bounceBefore;
+
+    /** True once the transition halt is applied, so it happens once per leg instead of every tick. */
+    private boolean halted;
+
+    /** Column being excavated, kept so a scan cut short by an unloaded chunk can be retried. */
+    private BlockPos columnPoint;
+    private int columnBottom = Integer.MIN_VALUE;
+    private boolean columnBlocked;
+
     /**
      * Defines the current travel stage.
      */
@@ -100,17 +118,19 @@ public class AutoPilot extends Module {
         }
 
         this.reset();
+        this.capture();
         Baritone.settings(1.43, 0.4, false);
 
         this.mining = Modules.get().get(MiningTweaks.class);
 
-        if (this.mining != null) {
-            this.enabled = this.mining.isActive();
-            if (!this.enabled) this.mining.toggle();
+        if (this.mining != null && !this.miningBefore) {
+            this.mining.toggle();
         }
 
         this.setup();
         this.load();
+
+        this.started = true;
     }
 
     /**
@@ -118,9 +138,13 @@ public class AutoPilot extends Module {
      */
     @Override
     public void onDeactivate() {
-        this.bounce(false);
+        if (!this.started) {
+            this.reset();
+            return;
+        }
 
         if (this.emergency) {
+            this.bounce(false);
             this.release();
         } else {
             this.abort();
@@ -212,6 +236,13 @@ public class AutoPilot extends Module {
         this.join = false;
         this.enabled = false;
         this.emergency = false;
+
+        this.started = false;
+        this.halted = false;
+
+        this.columnPoint = null;
+        this.columnBottom = Integer.MIN_VALUE;
+        this.columnBlocked = false;
     }
 
     /**
@@ -235,12 +266,55 @@ public class AutoPilot extends Module {
     }
 
     /**
-     * Restores the Mining Tweaks state from before activation.
+     * Remembers every module and setting this flight is about to change.
+     */
+    private void capture() {
+        Navigation navigation = this.navigation();
+        this.navigationBefore = navigation != null && navigation.isActive();
+
+        ElytraTweaks tweaks = Modules.get().get(ElytraTweaks.class);
+        this.tweaksBefore = tweaks != null && tweaks.isActive();
+        this.deployBefore = tweaks != null && tweaks.autoDeploy();
+
+        BounceFly bounce = Modules.get().get(BounceFly.class);
+        this.bounceBefore = bounce != null && bounce.isActive();
+
+        MiningTweaks mining = Modules.get().get(MiningTweaks.class);
+        this.miningBefore = mining != null && mining.isActive();
+        this.enabled = this.miningBefore;
+    }
+
+    /**
+     * Puts back every module and setting captured by {@link #capture()}, so a finished flight does
+     * not leave Bounce Fly, Navigation or auto-deploy in a state the player never asked for.
      */
     private void restore() {
-        if (this.mining != null && !this.enabled &&
-            this.mining.isActive()) {
-            this.mining.toggle();
+        if (!this.started) return;
+
+        MiningTweaks mining = Modules.get().get(MiningTweaks.class);
+        if (mining != null && mining.isActive() && !this.miningBefore) {
+            mining.toggle();
+        }
+
+        ElytraTweaks tweaks = Modules.get().get(ElytraTweaks.class);
+        if (tweaks != null) {
+            tweaks.deploy(this.deployBefore);
+            if (tweaks.isActive() && !this.tweaksBefore) tweaks.toggle();
+        }
+
+        Navigation navigation = this.navigation();
+        if (navigation != null && navigation.isActive() &&
+            !this.navigationBefore) {
+            navigation.toggle();
+        }
+
+        // An emergency landing is the one case where Bounce Fly must stay off, whatever it was on
+        // before: the whole point is to come down, and bouncing would launch us again.
+        if (this.emergency) return;
+
+        BounceFly bounce = Modules.get().get(BounceFly.class);
+        if (bounce != null && bounce.isActive() != this.bounceBefore) {
+            bounce.toggle();
         }
     }
 
@@ -671,6 +745,7 @@ public class AutoPilot extends Module {
                 return;
             }
             this.blocks = this.platform();
+            this.columnBlocked = false;
         }
 
         if (!this.support()) return;
@@ -757,6 +832,7 @@ public class AutoPilot extends Module {
         }
 
         this.leg = leg;
+        this.halted = false;
 
         if (this.state != State.Highway) {
             this.point = null;
@@ -800,6 +876,8 @@ public class AutoPilot extends Module {
      * Advances after reaching a highway endpoint.
      */
     private void cross() {
+        this.halted = false;
+
         List<Leg> legs = this.route.legs();
 
         int next = this.leg + 1;
@@ -834,14 +912,16 @@ public class AutoPilot extends Module {
      * @return true when the player can stop for the transition
      */
     private boolean arrive(Route.Leg road, boolean exiting) {
-        BounceFly bounce = Modules.get().get(BounceFly.class);
-        if (bounce != null && !bounce.isActive()) {
-            this.rotate(road.end());
-            bounce.toggle();
-        }
-
         if (!this.aligned(road) ||
             !this.close(road.end(), proximity)) {
+            // Still on the way: make sure Bounce Fly carries us the rest of it. Done only after the
+            // arrival test has failed, so it is never switched on for the tick that switches it off.
+            BounceFly bounce = Modules.get().get(BounceFly.class);
+            if (bounce != null && !bounce.isActive()) {
+                this.rotate(road.end());
+                this.bounce(true);
+            }
+
             return false;
         }
 
@@ -1184,8 +1264,19 @@ public class AutoPilot extends Module {
     private List<BlockPos> column(BlockPos point, int bottom) {
         List<BlockPos> blocks = new ArrayList<>();
 
+        this.columnPoint = point;
+        this.columnBottom = bottom;
+        this.columnBlocked = false;
+
         int px = point.getX(), pz = point.getZ();
         for (int py = point.getY() - 1; py >= bottom; py--) {
+            if (!this.mc.world.isChunkLoaded(px >> 4, pz >> 4)) {
+                // Everything below an unloaded chunk reads as air, so the rest of the column is
+                // unknown rather than clear. Stop here and let excavate() rescan it once it loads.
+                this.columnBlocked = true;
+                break;
+            }
+
             BlockPos pos = new BlockPos(px, py, pz);
             if (!this.empty(pos)) blocks.add(pos);
         }
@@ -1203,7 +1294,16 @@ public class AutoPilot extends Module {
 
         this.blocks.removeIf(pos -> this.empty(pos));
 
+        // A scan cut short by an unloaded chunk is not a clear column: rescan it as the chunk
+        // arrives instead of dropping through terrain nobody has loaded yet.
+        if (this.blocks.isEmpty() && this.columnBlocked &&
+            this.columnPoint != null) {
+            this.blocks = this.column(this.columnPoint, this.columnBottom);
+        }
+
         if (this.blocks.isEmpty()) {
+            if (this.columnBlocked) return false;
+
             this.release();
             return true;
         }
@@ -1422,6 +1522,9 @@ public class AutoPilot extends Module {
      * Holds the player still during a highway transition.
      */
     private void stop() {
+        if (this.halted) return;
+        this.halted = true;
+
         this.release();
 
         this.mc.player.stopGliding();

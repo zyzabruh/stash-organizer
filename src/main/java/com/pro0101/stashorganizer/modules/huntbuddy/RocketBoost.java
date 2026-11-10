@@ -251,8 +251,25 @@ public class RocketBoost extends Module {
    private int tracePending = 0;
    private int lastTraceAge = -1;
 
+   /** Tick the speed was last worked out on, so the three calls a tick share one solve. */
+   private int speedAge = -1;
+   private double speedCached = Double.NaN;
+
+   /** Ticks between debug line refreshes; the action bar is a counter, not a per-tick readout. */
+   private int debugTicks;
+
    public double getSpeed() {
-      return lastAppliedSpeed = throttle(rawSpeed());
+      // The vanilla expression this replaces asks for the speed three times in the same tick, and
+      // the throttle raytraces the world on top of the solver under auto-speed. Nothing the player
+      // controls can change between those calls, so answer the second and third from the first.
+      if (mc.player != null && mc.player.age == speedAge) {
+         return lastAppliedSpeed = speedCached;
+      }
+
+      speedAge = mc.player == null ? -1 : mc.player.age;
+      speedCached = throttle(rawSpeed());
+
+      return lastAppliedSpeed = speedCached;
    }
 
    /** The multiplier the speed settings ask for, before any safety throttle. */
@@ -658,8 +675,16 @@ public class RocketBoost extends Module {
    public long lastGainedMs = -1;
    public final List<Packet<?>> pongQueue = new ArrayList<>();
 
+   /**
+    * The join hook is a static nested class, and {@link Modules#add} only subscribes the module
+    * instance it is given - a class declaration on its own is never registered. Subscribing it here
+    * is what makes the reset below run at all.
+    */
+   private static final Hooks HOOKS = new Hooks();
+
    public RocketBoost() {
       super(StashOrganizerAddon.CATEGORY, "rocket-boost", "Packet-level boost engine (Grim-aware) that pitch-40 turns on; not a flight mode on its own.");
+      MeteorClient.EVENT_BUS.subscribe(HOOKS);
    }
 
    @Override
@@ -674,6 +699,8 @@ public class RocketBoost extends Module {
       hasLastRotation = false;
       lastAutoSpeed = Double.NaN;
       lastAppliedSpeed = Double.NaN;
+      speedAge = -1;
+      speedCached = Double.NaN;
       autoRecovery = 1.0;
       traceValid = false;
       closeTrace();
@@ -717,7 +744,10 @@ public class RocketBoost extends Module {
       // through. Before the first rocket of a flight there is nothing to report yet, and the slider is
       // the right stand-in, being what getSpeed itself falls back to.
       final double inForce = Double.isNaN(lastAppliedSpeed) ? speedMultiplier.get() : lastAppliedSpeed;
-      pushBaritoneSetting("elytraFireworkBoostMultiplier", inForce);
+      // Rounded to the two decimals the debug line shows: Baritone needs the plan to be close, and
+      // handing it a raw per-tick double would rewrite the reflection field every tick for a change
+      // it cannot even represent.
+      pushBaritoneSetting("elytraFireworkBoostMultiplier", Math.round(inForce * 100.0) / 100.0);
       pushBaritoneSetting("elytraFireworkExtraBoostTicks", boostDuration.get() / 50);
 
       // Say once, in chat, that it actually took. #set will show these too, but only if you go looking,
@@ -836,7 +866,6 @@ public class RocketBoost extends Module {
       lastFlushMs = System.currentTimeMillis();
       trackedRocketId = -1;
 
-      int pongsToFlush = pongQueue.size();
       if (mc.getNetworkHandler() != null) {
          for (Packet<?> p : pongQueue) mc.getNetworkHandler().sendPacket(p);
       }
@@ -1022,6 +1051,10 @@ public class RocketBoost extends Module {
          return;
       }
 
+      // Five times a second is faster than the numbers on it can be read, and it is an action bar
+      // line, so a rewrite every tick buys nothing but garbage.
+      if (++this.debugTicks % 5 != 0) return;
+
       String msg;
       if (!boosting) {
          if (lastGainedMs >= 0) {
@@ -1038,14 +1071,14 @@ public class RocketBoost extends Module {
                cooldInfo = "coold off";
             }
             msg = "§a§l[RB] §r§a+ " + lastGainedMs + "ms §7last gain"
-               + "\n§7ready for next rocket | " + cooldInfo;
+               + " §8| §7ready for next rocket | " + cooldInfo;
          } else {
             msg = "§7§l[RB] §r§7idle — fire a rocket to start"
-               + "\n§7cooldown: " + (cooldownAfterFlush.get() > 0 ? (cooldownAfterFlush.get() / 1000) + "s" : "off");
+               + " §8| §7cooldown: " + (cooldownAfterFlush.get() > 0 ? (cooldownAfterFlush.get() / 1000) + "s" : "off");
          }
       } else if (boostStartMs == -1) {
          msg = "§e§l[RB] §r§etracking #" + trackedRocketId
-               + "\n§7destroy packet pas encore arrive | pongs: " + pongQueue.size();
+               + " §8| §7destroy packet not here yet | pongs: " + pongQueue.size();
       } else {
          long elapsed = System.currentTimeMillis() - boostStartMs;
          long remaining = boostDuration.get() - elapsed;
@@ -1054,7 +1087,7 @@ public class RocketBoost extends Module {
          long percent = (elapsed * 100) / Math.max(1, boostDuration.get());
          String setbackTag = setbackCount > 0 ? " §4§lFLAGGED x" + setbackCount + "§r" : "";
          msg = colBold + "[RB] §r" + col + elapsed + "ms" + "§7/" + boostDuration.get() + "ms (" + percent + "%)"
-            + "\n§7+" + remaining + "ms left | pongs: " + pongQueue.size() + setbackTag;
+            + " §8| §7+" + remaining + "ms left | pongs: " + pongQueue.size() + setbackTag;
       }
 
       if (autoSpeed.get()) {
