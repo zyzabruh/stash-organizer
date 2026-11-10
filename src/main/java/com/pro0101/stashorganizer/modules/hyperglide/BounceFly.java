@@ -108,6 +108,16 @@ public class BounceFly extends Module {
         .build()
     );
 
+    private final Setting<Integer> passTimeout = this.general.add(new IntSetting.Builder()
+        .name("pass-timeout")
+        .description("Ticks to keep bouncing paused after asking Baritone for a path. Baritone reports nothing while it calculates, and treating that silence as finished is what resumed the bounce on top of the walk.")
+        .defaultValue(100)
+        .min(20)
+        .sliderRange(20, 200)
+        .visible(() -> this.passer.get())
+        .build()
+    );
+
     private final Setting<Boolean> freelook = this.general.add(new BoolSetting.Builder()
         .name("freelook")
         .description("Keeps the camera on its own rotation while the module steers the player. Meteor's freecam cannot do this here: it derives its angle from the player rotation, which this module rewrites every tick.")
@@ -131,6 +141,7 @@ public class BounceFly extends Module {
     private int level = low;
 
     private boolean pass;
+    private int passWait;
     private boolean launch;
     private boolean enabled;
     private boolean started;
@@ -248,7 +259,9 @@ public class BounceFly extends Module {
      * @return forced jump state
      */
     public boolean jumping() {
-        return this.launch;
+        // A stale launch flag used to survive a handover to Baritone, and the key mixin kept answering the
+        // jump as pressed while the player was walking. The input is only ours while the module drives movement.
+        return this.launch && this.enabled();
     }
 
     /**
@@ -276,6 +289,7 @@ public class BounceFly extends Module {
         this.blocks.clear();
         this.goal = null;
         this.focus = null;
+        this.passWait = 0;
     }
 
     /**
@@ -414,6 +428,16 @@ public class BounceFly extends Module {
         if (this.pass && Baritone.pathing()) {
             this.release();
             this.reset();
+            this.passWait = 0;
+            return true;
+        }
+
+        // Baritone computes its path off the main thread: for a moment after walk() it reports neither a
+        // custom goal nor pathing, which is not the same as having finished. Keep the movement released for
+        // that window, otherwise the bounce resumes underneath the walk.
+        if (this.pass && this.passWait++ < this.passTimeout.get()) {
+            this.release();
+            this.reset();
             return true;
         }
 
@@ -507,6 +531,7 @@ public class BounceFly extends Module {
         this.clear();
 
         this.pass = true;
+        this.passWait = 0;
         this.started = false;
 
         int px = this.dx * reach;
@@ -527,6 +552,7 @@ public class BounceFly extends Module {
         this.setup();
 
         this.pass = true;
+        this.passWait = 0;
         this.goal = goal;
         this.focus = null;
         this.started = false;
