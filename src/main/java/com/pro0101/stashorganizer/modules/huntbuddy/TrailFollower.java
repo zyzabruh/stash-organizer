@@ -146,6 +146,15 @@ public class TrailFollower extends Module {
                 .defaultValue(true)
                 .build()
         );
+    public final Setting<Boolean> netherElytra = this.sgGeneral
+        .add(
+            new meteordevelopment.meteorclient.settings.BoolSetting.Builder()
+                .name("nether-elytra")
+                .description("Lets baritone fly the trail in the nether. Off by default: its flight and landing search run through Baritone's native nether pathfinder, which segfaults on some setups (cabaletta/baritone#4830) and takes the whole game down rather than raising an exception. Walking is slower but cannot crash this way.")
+                .defaultValue(false)
+                .visible(this.autoElytra::get)
+                .build()
+        );
     private final SettingGroup sgAdvanced = this.settings.createGroup("Advanced", false);
     public final Setting<Double> pathDistance = this.sgAdvanced
         .add(
@@ -380,6 +389,7 @@ public class TrailFollower extends Module {
     private boolean resumeAwaitingChunk;
     private RegistryKey<World> activeDimension;
     private int baritoneSetGoalTicks = 0;
+    private int retargetTicks = 0;
     private boolean elytraGoal;
     private int elytraGoalX;
     private int elytraGoalZ;
@@ -396,6 +406,7 @@ public class TrailFollower extends Module {
         this.posDebug = null;
         this.resumeAwaitingChunk = false;
         this.baritoneSetGoalTicks = 0;
+        this.retargetTicks = 0;
         this.elytraGoal = false;
         this.lastGoalYaw = Double.NaN;
         this.followingTrail = false;
@@ -657,7 +668,8 @@ public class TrailFollower extends Module {
             && BaritoneHelper.hasElytraProcess()
             && this.mc.player.isGliding()
             && FlightGear.hasElytra(this.mc.player)
-            && FlightGear.hasRockets();
+            && FlightGear.hasRockets()
+            && (!FlightGear.isNether(this.mc.world) || this.netherElytra.get());
     }
 
     /**
@@ -756,8 +768,15 @@ public class TrailFollower extends Module {
             switch (this.followMode) {
                 case BARITONE:
                     this.baritoneSetGoalTicks--;
-                    if (this.baritoneSetGoalTicks <= 0 || this.headingMoved()) {
+                    this.retargetTicks++;
+
+                    // A turn used to retarget on its own, and every retarget cancels a path calculation. In the
+                    // nether that calculation runs in Baritone's native pathfinder, so the churn is also a crash
+                    // surface: never retarget more than once a second, however fast the trail bends.
+                    if (this.baritoneSetGoalTicks <= 0
+                        || this.retargetTicks >= 20 && this.headingMoved()) {
                         this.baritoneSetGoalTicks = this.baritoneUpdateTicks.get();
+                        this.retargetTicks = 0;
                         Vec3d baritoneTarget = this.baritoneTarget();
 
                         if (baritoneTarget != null) {
