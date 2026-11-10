@@ -5,6 +5,7 @@ import com.pro0101.stashorganizer.modules.hyperglide.utilities.Baritone;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Client;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Elytra;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Player;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -15,6 +16,10 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -24,6 +29,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Set;
 
 public class BounceFly extends Module {
     private static final double ticks = 20.0;
@@ -43,6 +49,15 @@ public class BounceFly extends Module {
 
     private static final int[] dxs = {0, -1, -1, -1, 0, 1, 1, 1};
     private static final int[] dzs = {1, 1, 0, -1, -1, -1, 0, 1};
+
+    private static final double hazardWidth = 4.0;
+    private static final double hazardHeight = 6.0;
+
+    private static final Set<EntityType<?>> hazards = Set.of(
+        EntityType.TNT, EntityType.END_CRYSTAL, EntityType.WARDEN,
+        EntityType.WITHER, EntityType.FIREBALL, EntityType.SMALL_FIREBALL,
+        EntityType.WITHER_SKULL, EntityType.SHULKER_BULLET
+    );
 
     private final SettingGroup general = this.settings.getDefaultGroup();
 
@@ -118,6 +133,39 @@ public class BounceFly extends Module {
         .build()
     );
 
+    private final Setting<Integer> setbackPause = this.general.add(new IntSetting.Builder()
+        .name("pause-after-setback")
+        .description("Ticks bouncing stays off once the server moves you back. The inputs are released and the client-side glide is dropped either way; pressing the same thing again on the tick a setback lands is what turns one rubber band into two.")
+        .defaultValue(1)
+        .min(0)
+        .sliderMax(40)
+        .build()
+    );
+
+    private final Setting<Boolean> recover = this.general.add(new BoolSetting.Builder()
+        .name("recover-glide-clear")
+        .description("Presses jump again on the tick the server clears the glide mid-hop, instead of waiting for the toggle sequence to line up and losing a hop.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> stopNear = this.general.add(new BoolSetting.Builder()
+        .name("stop-near-entities")
+        .description("Stops the module when a dangerous entity is ahead on the flight path. Bouncing at highway speed cannot outrun a crystal or a warden.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Double> hazardRange = this.general.add(new DoubleSetting.Builder()
+        .name("hazard-range")
+        .description("How far ahead a dangerous entity stops the module.")
+        .defaultValue(24.0)
+        .min(4.0)
+        .sliderMax(64.0)
+        .visible(this.stopNear::get)
+        .build()
+    );
+
     private final Setting<Boolean> freelook = this.general.add(new BoolSetting.Builder()
         .name("freelook")
         .description("Keeps the camera on its own rotation while the module steers the player. Meteor's freecam cannot do this here: it derives its angle from the player rotation, which this module rewrites every tick.")
@@ -145,6 +193,10 @@ public class BounceFly extends Module {
     private boolean launch;
     private boolean enabled;
     private boolean started;
+
+    private boolean wasGliding;
+    private boolean force;
+    private int pause;
 
     private float viewYaw;
     private float viewPitch;
@@ -183,6 +235,10 @@ public class BounceFly extends Module {
         this.clear();
         this.pass = false;
         this.started = false;
+
+        this.wasGliding = false;
+        this.force = false;
+        this.pause = 0;
     }
 
     /**
@@ -203,6 +259,10 @@ public class BounceFly extends Module {
         this.enabled = false;
         this.started = false;
         this.viewActive = false;
+
+        this.wasGliding = false;
+        this.force = false;
+        this.pause = 0;
     }
 
     //region Event handlers
@@ -219,6 +279,18 @@ public class BounceFly extends Module {
         this.camera(this.freelook.get());
 
         if (!this.available()) return;
+
+        // A setback is the server rejecting the last movement. Pressing the same inputs again on
+        // the tick it lands is what turns one rubber band into two, so they stay released until
+        // the client has been put back where the server put it.
+        if (this.pause > 0) {
+            this.pause--;
+            this.release();
+            this.reset();
+            return;
+        }
+
+        if (this.hazard()) return;
 
         if (!Baritone.pathing()) this.rotate();
         Vec3d vel = this.mc.player.getVelocity();
@@ -237,6 +309,22 @@ public class BounceFly extends Module {
         if (this.blocked()) return;
 
         this.stuck();
+    }
+
+    /**
+     * Notes a server correction so the bounce can answer it on the next tick.
+     *
+     * <p>Meteor fires the receive event on the netty thread, so nothing is touched here: the
+     * state change is handed to the main thread.
+     *
+     * @param event packet receive event
+     */
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        if (!this.isActive()) return;
+        if (!(event.packet instanceof PlayerPositionLookS2CPacket)) return;
+
+        this.mc.execute(this::setback);
     }
 
     //endregion
@@ -280,6 +368,7 @@ public class BounceFly extends Module {
         this.slow = 0;
         this.jump = 0;
         this.launch = false;
+        this.force = false;
     }
 
     /**
@@ -347,17 +436,37 @@ public class BounceFly extends Module {
      * @param velocity current player velocity
      */
     private void launch(Vec3d velocity) {
+        boolean gliding = this.mc.player.isGliding();
+
+        // The server can clear the glide on its own schedule, usually mid-hop and with nothing in
+        // the client asking for it. The previous toggle is a tick out of phase by then, so the
+        // press is made deliberately instead of waiting for the sequence to line up again.
+        if (this.recover.get() && this.wasGliding && !gliding
+            && !this.mc.player.isOnGround()) {
+            this.force = true;
+            this.jump = 0;
+        }
+
+        this.wasGliding = gliding;
+
         if (this.mc.player.isOnGround()) {
             this.launch = this.started ||
                 this.mc.player.isSprinting() &&
                 velocity.horizontalLength() > 0.05;
             this.jump = 0;
+            this.force = false;
             return;
         }
 
-        if (this.mc.player.isGliding()) {
+        if (gliding) {
             this.launch = false;
             this.jump = 0;
+            return;
+        }
+
+        if (this.force) {
+            this.force = false;
+            this.launch = true;
             return;
         }
 
@@ -396,6 +505,26 @@ public class BounceFly extends Module {
         if (this.mc.player != null) {
             this.mc.player.setSprinting(false);
         }
+    }
+
+    /**
+     * Drops the bounce state after the server moved the player back.
+     *
+     * <p>The client is left holding a glide the server no longer agrees with, so it is dropped
+     * here and the inputs stay released for {@code pause-after-setback} ticks. The first takeoff
+     * after the pause starts the sequence over rather than resuming a stale one.
+     */
+    private void setback() {
+        if (!Client.ready()) return;
+
+        this.release();
+        this.reset();
+
+        this.wasGliding = false;
+        this.started = false;
+        this.pause = this.setbackPause.get();
+
+        this.mc.player.stopGliding();
     }
 
     //endregion
@@ -499,6 +628,57 @@ public class BounceFly extends Module {
         }
     }
 
+    /**
+     * Stops the bounce when something dangerous is ahead on the flight path.
+     *
+     * <p>Only entities in front of the player and inside a narrow box around the heading count: a
+     * bounce covers blocks in ticks and cannot outrun a crystal or a warden, so the module hands
+     * control back instead of flying into one.
+     *
+     * @return true when the module was stopped
+     */
+    private boolean hazard() {
+        if (!this.stopNear.get()) return false;
+
+        Vec3d origin = this.mc.player.getEntityPos();
+        Vec3d heading = new Vec3d(this.nx, 0.0, this.nz);
+
+        double range = this.hazardRange.get();
+        Entity nearest = null;
+
+        for (Entity entity : this.mc.world.getEntities()) {
+            if (!hazards.contains(entity.getType())) continue;
+
+            Vec3d offset = entity.getEntityPos().subtract(origin);
+            double ahead = offset.x * heading.x + offset.z * heading.z;
+            double lateral = Math.abs(
+                offset.x * heading.z - offset.z * heading.x
+            );
+
+            if (ahead <= 0.0 || ahead > range) continue;
+            if (lateral > hazardWidth) continue;
+            if (Math.abs(offset.y) > hazardHeight) continue;
+
+            nearest = entity;
+            range = ahead;
+        }
+
+        if (nearest == null) return false;
+
+        this.release();
+        this.reset();
+
+        this.mc.player.stopGliding();
+
+        this.warning(
+            "Approaching %s, stopping.",
+            nearest.getType().getName().getString()
+        );
+
+        this.toggle();
+        return true;
+    }
+
     //endregion
 
     //region Obstacle pathing
@@ -533,12 +713,15 @@ public class BounceFly extends Module {
         this.pass = true;
         this.passWait = 0;
         this.started = false;
+        this.wasGliding = false;
 
         int px = this.dx * reach;
         int pz = this.dz * reach;
 
         pos = this.block(pos.getX(), pos.getZ());
-        Baritone.walk(pos.add(px, 0, pz));
+        pos = this.safe(pos.add(px, 0, pz));
+
+        Baritone.walk(pos);
     }
 
     /**
@@ -593,6 +776,69 @@ public class BounceFly extends Module {
     //endregion
 
     //region Obstacle scanning
+
+    /**
+     * Keeps a Baritone goal inside terrain the client already has.
+     *
+     * <p>The recovery goal used to be projected further along the highway whether or not those
+     * chunks were loaded. Baritone's pathfinder is native and answers a chunk missing in front of
+     * it with a segfault rather than an exception (cabaletta/baritone#4830), so the goal now stops
+     * at the last loaded, standable, non-portal block between the player and the request.
+     *
+     * @param target requested goal
+     * @return furthest safe goal before the request, or the last loaded block when none is safe
+     */
+    private BlockPos safe(BlockPos target) {
+        BlockPos start = this.base();
+
+        int sx = Integer.signum(target.getX() - start.getX());
+        int sz = Integer.signum(target.getZ() - start.getZ());
+
+        if (sx == 0 && sz == 0) return target;
+
+        BlockPos last = null;
+        BlockPos loaded = start;
+        BlockPos pos = start;
+
+        for (int idx = 0; idx < span; idx++) {
+            pos = pos.add(sx, 0, sz);
+
+            if (!this.loaded(pos)) break;
+
+            loaded = pos;
+            if (this.standable(pos)) last = pos;
+            if (pos.equals(target)) break;
+        }
+
+        return last != null ? last : loaded;
+    }
+
+    /**
+     * Checks whether the client has the chunk a block belongs to.
+     *
+     * @param pos block position to check
+     * @return true when the chunk is loaded
+     */
+    private boolean loaded(BlockPos pos) {
+        return this.mc.world.getChunkManager().isChunkLoaded(
+            pos.getX() >> 4, pos.getZ() >> 4
+        );
+    }
+
+    /**
+     * Checks whether Baritone may stand on a block.
+     *
+     * @param pos block position to check
+     * @return true when the block is clear, supported and not a portal
+     */
+    private boolean standable(BlockPos pos) {
+        BlockState state = this.mc.world.getBlockState(pos);
+
+        if (state.isOf(Blocks.NETHER_PORTAL)) return false;
+        if (state.isOf(Blocks.VOID_AIR)) return false;
+
+        return this.clear(pos);
+    }
 
     /**
      * Finds a safe center position for recovery pathing.

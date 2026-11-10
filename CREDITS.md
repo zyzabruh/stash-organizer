@@ -48,6 +48,10 @@ code) is original work.
 - `TrailFollower`'s `Pitch40` flight mode drives the imported `Pitch40` module, which in turn uses `ElytraRecast` and
   `RocketBoost`; all three are registered, so the mode works instead of finding no module to toggle. `HuntFeed` lost its
   companion-pet bridge, which would have pulled the whole pet package in.
+- `BounceFly` keeps its Hyperglide origin. Its glide-clear recovery, `pause-after-setback`, `stop-near-entities`
+  and the loaded-chunk guard on the Baritone goal are ported from HunterBuddy's `ElytraBounce` and `BounceHazards`
+  (`4cae4b1`, GPL-3.0). Packet holding, fake-lag, pitch solving and chestplate fakefly from that module are
+  deliberately not imported: they hide client decisions from the server.
 - Xaero's Minimap, World Map and XaeroPlus are `modCompileOnly` dependencies (`25.3.10`, `1.40.11`, `2.30.8`): the
   two Xaero modules need them at runtime and none of their code is bundled in this jar. The addon checks for those
   classes and only then registers `trail-follower` and `chunk-radar` by name, so a missing Xaero disables two modules
