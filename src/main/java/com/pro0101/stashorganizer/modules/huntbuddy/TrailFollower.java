@@ -3,11 +3,13 @@ package com.pro0101.stashorganizer.modules.huntbuddy;
 import com.pro0101.stashorganizer.util.ModuleSettings;
 
 import baritone.api.BaritoneAPI;
+import baritone.api.IBaritone;
 import baritone.api.pathing.goals.GoalXZ;
 import com.pro0101.stashorganizer.StashOrganizerAddon;
 import com.pro0101.stashorganizer.modules.huntbuddy.util.TrailHeading;
 import com.pro0101.stashorganizer.modules.huntbuddy.util.TrailScan;
 import com.pro0101.stashorganizer.modules.huntbuddy.util.BaritoneHelper;
+import com.pro0101.stashorganizer.modules.huntbuddy.recast.FlightGear;
 import com.pro0101.stashorganizer.modules.huntbuddy.util.Utils;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -378,6 +380,10 @@ public class TrailFollower extends Module {
     private boolean resumeAwaitingChunk;
     private RegistryKey<World> activeDimension;
     private int baritoneSetGoalTicks = 0;
+    private boolean elytraGoal;
+    private int elytraGoalX;
+    private int elytraGoalZ;
+    private double lastGoalYaw = Double.NaN;
     Vec3d posDebug;
 
     public TrailFollower() {
@@ -390,6 +396,8 @@ public class TrailFollower extends Module {
         this.posDebug = null;
         this.resumeAwaitingChunk = false;
         this.baritoneSetGoalTicks = 0;
+        this.elytraGoal = false;
+        this.lastGoalYaw = Double.NaN;
         this.followingTrail = false;
         this.trail = new ArrayDeque<>();
         this.possibleTrail = new ArrayDeque<>();
@@ -571,6 +579,11 @@ public class TrailFollower extends Module {
             }
         }
         if (this.followMode == TrailFollower.FollowMode.BARITONE) {
+            if (this.elytraGoal && BaritoneHelper.hasElytraProcess()) {
+                BaritoneAPI.getProvider().getPrimaryBaritone().getElytraProcess().onLostControl();
+            }
+
+            this.elytraGoal = false;
             BaritoneAPI.getProvider().getPrimaryBaritone().getCommandManager().execute("cancel");
         }
         this.pitch40ToggledByUs = false;
@@ -598,6 +611,94 @@ public class TrailFollower extends Module {
                     + " seconds."
             );
         }
+    }
+
+    /**
+     * Where Baritone should be pointed this update.
+     *
+     * <p>The nether trail mode picks between the averaged heading and the last trail chunk; every other mode, and the
+     * overworld, uses the heading projected forward.
+     *
+     * @return target position, or null when the trail mode has nothing to read
+     */
+    private Vec3d baritoneTarget() {
+        if (this.mc.world.getRegistryKey().equals(World.NETHER)
+            && this.netherPathMode.get() != TrailFollower.NetherPathMode.AVERAGE) {
+            return this.trail.isEmpty() ? null : this.trail.getLast();
+        }
+
+        return this.offsetAlongYaw(this.mc.player.getEntityPos(), this.targetYaw, this.pathDistanceActual);
+    }
+
+    /**
+     * Whether the trail has turned enough to retarget before the next scheduled update.
+     *
+     * <p>The goal update runs every {@code baritone-path-update-ticks}, which is invisible on a straight highway and
+     * very visible in a turn - exactly the turn an elytra path is least likely to survive.
+     *
+     * @return true when the heading moved more than 15 degrees since the last goal
+     */
+    private boolean headingMoved() {
+        return !Double.isNaN(this.lastGoalYaw)
+            && Math.abs(MathHelper.wrapDegrees(this.targetYaw - this.lastGoalYaw)) > 15.0;
+    }
+
+    /**
+     * Whether the elytra process can take the goal instead of the walking path.
+     *
+     * <p>In the nether the walking path is both slower and more dangerous - low ceiling, lava floor - so an equipped
+     * elytra with rockets beats walking. Baritone only flies what is already gliding, so this stays false on the
+     * ground and the walking goal is kept; nothing here launches the player.
+     *
+     * @return true when Baritone should fly the goal
+     */
+    private boolean flyable() {
+        return this.autoElytra.get()
+            && BaritoneHelper.hasElytraProcess()
+            && this.mc.player.isGliding()
+            && FlightGear.hasElytra(this.mc.player)
+            && FlightGear.hasRockets();
+    }
+
+    /**
+     * Hands the goal to Baritone's elytra process.
+     *
+     * @param x goal x
+     * @param z goal z
+     */
+    private void flyTo(int x, int z) {
+        IBaritone baritone = BaritoneAPI.getProvider().getPrimaryBaritone();
+
+        if (this.elytraGoal && this.elytraGoalX == x && this.elytraGoalZ == z
+            && baritone.getElytraProcess().currentDestination() != null) {
+            return;
+        }
+
+        // A walking goal competes for the same inputs, so it is dropped before the flight is set.
+        baritone.getCustomGoalProcess().setGoal(null);
+        BaritoneAPI.getSettings().elytraTermsAccepted.value = true;
+        baritone.getElytraProcess().pathTo(new GoalXZ(x, z));
+
+        this.elytraGoal = true;
+        this.elytraGoalX = x;
+        this.elytraGoalZ = z;
+    }
+
+    /**
+     * Hands the goal to normal pathing, dropping any elytra destination first.
+     *
+     * @param x goal x
+     * @param z goal z
+     */
+    private void walkTo(int x, int z) {
+        IBaritone baritone = BaritoneAPI.getProvider().getPrimaryBaritone();
+
+        if (this.elytraGoal) {
+            baritone.getElytraProcess().onLostControl();
+            this.elytraGoal = false;
+        }
+
+        baritone.getCustomGoalProcess().setGoalAndPath(new GoalXZ(x, z));
     }
 
     @EventHandler
@@ -654,37 +755,22 @@ public class TrailFollower extends Module {
 
             switch (this.followMode) {
                 case BARITONE:
-                    if (this.baritoneSetGoalTicks > 0) {
-                        this.baritoneSetGoalTicks--;
-                    } else if (this.baritoneSetGoalTicks == 0) {
+                    this.baritoneSetGoalTicks--;
+                    if (this.baritoneSetGoalTicks <= 0 || this.headingMoved()) {
                         this.baritoneSetGoalTicks = this.baritoneUpdateTicks.get();
-                        if (this.mc.world.getRegistryKey().equals(World.NETHER)) {
-                            if (!this.trail.isEmpty()) {
-                                Vec3d baritoneTarget;
-                                if (this.netherPathMode.get() == TrailFollower.NetherPathMode.AVERAGE) {
-                                    baritoneTarget = this.offsetAlongYaw(this.mc.player.getEntityPos(), this.targetYaw, this.pathDistanceActual);
-                                } else {
-                                    baritoneTarget = this.trail.getLast();
-                                }
+                        Vec3d baritoneTarget = this.baritoneTarget();
 
-                                BaritoneAPI.getProvider()
-                                    .getPrimaryBaritone()
-                                    .getCustomGoalProcess()
-                                    .setGoalAndPath(new GoalXZ((int)baritoneTarget.x, (int)baritoneTarget.z));
+                        if (baritoneTarget != null) {
+                            int targetX = (int) baritoneTarget.x;
+                            int targetZ = (int) baritoneTarget.z;
+                            this.lastGoalYaw = this.targetYaw;
+
+                            // Only one of the two processes may own the goal: they steer the same inputs.
+                            if (this.flyable()) {
+                                this.flyTo(targetX, targetZ);
+                            } else {
+                                this.walkTo(targetX, targetZ);
                             }
-                        } else {
-                            Vec3d targetPos = this.offsetAlongYaw(this.mc.player.getEntityPos(), this.targetYaw, this.pathDistanceActual);
-                            BaritoneAPI.getProvider()
-                                .getPrimaryBaritone()
-                                .getCustomGoalProcess()
-                                .setGoalAndPath(new GoalXZ((int)targetPos.x, (int)targetPos.z));
-                        }
-
-                        if (this.autoElytra.get()
-                            && BaritoneHelper.hasElytraProcess()
-                            && BaritoneAPI.getProvider().getPrimaryBaritone().getElytraProcess().currentDestination() == null) {
-                            BaritoneAPI.getSettings().elytraTermsAccepted.value = true;
-                            BaritoneAPI.getProvider().getPrimaryBaritone().getCommandManager().execute("elytra");
                         }
                     }
                     break;
