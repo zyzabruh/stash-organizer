@@ -21,8 +21,10 @@ import net.minecraft.util.math.MathHelper;
  *
  * <p>A firework pushed while looking up buys altitude and speed at the same time; pointing down afterwards converts
  * that altitude into horizontal speed, because the glide step redirects the fall along the look. Level flight then
- * keeps it. The module drives the rotation and fires the rocket, and leaves the multiplier to rocket-boost: with
- * auto-speed on it solves the per-axis bound for the look it is given, which is why the cycle changes the angle.
+ * keeps it. The phases are driven by the vertical speed it produces - the climb ends when the rocket has actually
+ * lifted the player, the dive when the fall has been given back - so the tick counts only guard against a stall.
+ * The module drives the rotation and fires the rocket, and leaves the multiplier to rocket-boost: with auto-speed on
+ * it solves the per-axis bound for the look it is given, which is why the cycle changes the angle.
  */
 public class RocketCycle extends Module {
     /** Where the cycle currently is. */
@@ -39,21 +41,59 @@ public class RocketCycle extends Module {
     private final SettingGroup sgLaunch = this.settings.createGroup("Launch");
     private final SettingGroup sgControl = this.settings.createGroup("Control");
 
-    private final Setting<Integer> climbTicks = this.sgCycle.add(new IntSetting.Builder()
-        .name("climb-ticks")
-        .description("Ticks spent looking up after the rocket is fired.")
-        .defaultValue(10)
-        .min(1)
-        .sliderRange(1, 40)
+    private final Setting<Double> climbRate = this.sgCycle.add(new DoubleSetting.Builder()
+        .name("climb-rate")
+        .description("Vertical speed, in blocks per tick, that ends the climb. Ten ticks at a shallow pitch buy far less height than ten at a steep one, so the speed decides and the tick count only guards the phase.")
+        .defaultValue(0.35)
+        .min(0.05)
+        .sliderRange(0.1, 1.0)
+        .decimalPlaces(2)
         .build()
     );
 
-    private final Setting<Integer> diveTicks = this.sgCycle.add(new IntSetting.Builder()
-        .name("dive-ticks")
-        .description("Ticks spent looking down, converting the height the climb bought into speed.")
+    private final Setting<Integer> minClimbTicks = this.sgCycle.add(new IntSetting.Builder()
+        .name("min-climb-ticks")
+        .description("Ticks to stay in the climb even when the speed target is already reached.")
+        .defaultValue(2)
+        .min(1)
+        .sliderRange(1, 10)
+        .build()
+    );
+
+    private final Setting<Integer> climbTimeout = this.sgCycle.add(new IntSetting.Builder()
+        .name("climb-timeout")
+        .description("Ticks after which the climb ends anyway, so a rocket that never lifts the player cannot stall the cycle.")
         .defaultValue(20)
         .min(1)
         .sliderRange(1, 60)
+        .build()
+    );
+
+    private final Setting<Double> diveRelease = this.sgCycle.add(new DoubleSetting.Builder()
+        .name("dive-release")
+        .description("Fall rate, as a positive number, at which the dive ends: the player is no longer dropping faster than this, so the height has been spent.")
+        .defaultValue(0.2)
+        .min(0.0)
+        .sliderRange(0.0, 1.0)
+        .decimalPlaces(2)
+        .build()
+    );
+
+    private final Setting<Integer> minDiveTicks = this.sgCycle.add(new IntSetting.Builder()
+        .name("min-dive-ticks")
+        .description("Ticks to stay in the dive even when the fall has already slowed.")
+        .defaultValue(3)
+        .min(1)
+        .sliderRange(1, 10)
+        .build()
+    );
+
+    private final Setting<Integer> diveTimeout = this.sgCycle.add(new IntSetting.Builder()
+        .name("dive-timeout")
+        .description("Ticks after which the dive ends anyway.")
+        .defaultValue(40)
+        .min(1)
+        .sliderRange(1, 80)
         .build()
     );
 
@@ -188,10 +228,32 @@ public class RocketCycle extends Module {
 
         this.ticks++;
 
-        if (this.ticks >= this.length(this.phase)) {
+        if (this.done()) {
             this.phase = this.next(this.phase);
             this.ticks = 0;
         }
+    }
+
+    /**
+     * Whether the current phase is over.
+     *
+     * <p>Climb and dive end on the vertical speed, with the tick count as the fallback; the cruise is the only phase
+     * that is still purely about time, because it has nothing to reach - it just holds what the dive gained.
+     *
+     * @return true when the cycle should advance
+     */
+    private boolean done() {
+        double vertical = this.mc.player.getVelocity().y;
+
+        return switch (this.phase) {
+            case CLIMB -> RocketCycleLogic.climbDone(
+                vertical, this.ticks, this.minClimbTicks.get(), this.climbTimeout.get(), this.climbRate.get()
+            );
+            case DIVE -> RocketCycleLogic.diveDone(
+                vertical, this.ticks, this.minDiveTicks.get(), this.diveTimeout.get(), this.diveRelease.get()
+            );
+            case CRUISE -> this.ticks >= this.cruiseTicks.get();
+        };
     }
 
     /**
@@ -204,20 +266,6 @@ public class RocketCycle extends Module {
             case CLIMB -> this.upPitch.get();
             case DIVE -> this.downPitch.get();
             case CRUISE -> this.levelPitch.get();
-        };
-    }
-
-    /**
-     * Ticks the given phase lasts.
-     *
-     * @param phase phase to measure
-     * @return duration in ticks
-     */
-    private int length(Phase phase) {
-        return switch (phase) {
-            case CLIMB -> this.climbTicks.get();
-            case DIVE -> this.diveTicks.get();
-            case CRUISE -> this.cruiseTicks.get();
         };
     }
 
