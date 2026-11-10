@@ -24,7 +24,6 @@ import net.minecraft.util.math.Vec3d;
  * reproduced: growing the motion is exactly what this measurement exposes.
  */
 public class BoostBounds extends Module {
-    private static final double skip = 0.05;
     private static final double epsilon = 1.0E-6;
 
     private final SettingGroup sgLimits = this.settings.createGroup("Limits");
@@ -159,18 +158,18 @@ public class BoostBounds extends Module {
      * @param rotation current look direction
      */
     private void measure(Vec3d motion, Vec3d rotation) {
-        Result result = this.limits(motion, rotation);
+        BoostEnvelope.Result result = this.limits(motion, rotation);
         if (result == null) {
             this.bounded = false;
             return;
         }
 
-        this.scale = result.scale;
-        this.ratio = result.ratio;
-        this.bounded = result.scale < result.ratio;
+        this.scale = result.scale();
+        this.ratio = result.ratio();
+        this.bounded = result.scale() < result.ratio();
 
-        if (this.clamp.get() && result.scale > 1.0) {
-            this.mc.player.setVelocity(motion.multiply(1.0 / result.scale));
+        if (this.clamp.get() && result.scale() > 1.0) {
+            this.mc.player.setVelocity(motion.multiply(1.0 / result.scale()));
         }
 
         this.report();
@@ -183,7 +182,7 @@ public class BoostBounds extends Module {
      * @param rotation current look direction
      * @return measured envelope, or null when there is nothing to compare
      */
-    private Result limits(Vec3d motion, Vec3d rotation) {
+    private BoostEnvelope.Result limits(Vec3d motion, Vec3d rotation) {
         Vec3d previous = Vec3d.fromPolar(this.pitch, this.yaw).normalize();
         Vec3d predicted = Elytra.glide(this.velocity, rotation);
 
@@ -191,61 +190,17 @@ public class BoostBounds extends Module {
             return null;
         }
 
-        double amount = Math.min(this.scaling.get(), motion.length());
-
-        double minX = Math.min(-skip, rotation.x) + Math.min(-skip, previous.x);
-        double minY = Math.min(-skip, rotation.y) + Math.min(-skip, previous.y);
-        double minZ = Math.min(-skip, rotation.z) + Math.min(-skip, previous.z);
-        double maxX = Math.max(skip, rotation.x) + Math.max(skip, previous.x);
-        double maxY = Math.max(skip, rotation.y) + Math.max(skip, previous.y);
-        double maxZ = Math.max(skip, rotation.z) + Math.max(skip, previous.z);
-
-        minX = Math.max(-amount, minX * amount);
-        maxX = Math.min(amount, maxX * amount);
-        minY = Math.max(-amount, minY * amount);
-        maxY = Math.min(amount, maxY * amount);
-        minZ = Math.max(-amount, minZ * amount);
-        maxZ = Math.min(amount, maxZ * amount);
-
-        Vec3d base = this.velocity;
-        double minOffsetX = Math.min(0.0, minX - base.x);
-        double maxOffsetX = Math.max(0.0, maxX - base.x);
-        double minOffsetY = Math.min(0.0, minY - base.y);
-        double maxOffsetY = Math.max(0.0, maxY - base.y);
-        double minOffsetZ = Math.min(0.0, minZ - base.z);
-        double maxOffsetZ = Math.max(0.0, maxZ - base.z);
-
-        double lowX = predicted.x + minOffsetX;
-        double highX = predicted.x + maxOffsetX;
-        double lowY = predicted.y + minOffsetY;
-        double highY = predicted.y + maxOffsetY + this.vertical.get();
-        double lowZ = predicted.z + minOffsetZ;
-        double highZ = predicted.z + maxOffsetZ;
-
-        double exceedX = this.exceed(motion.x, lowX, highX);
-        double exceedY = this.exceed(motion.y, lowY, highY);
-        double exceedZ = this.exceed(motion.z, lowZ, highZ);
-
-        double scale = Math.max(exceedX, Math.max(exceedY, exceedZ));
-        double ratio = motion.length() / predicted.length();
-
-        return new Result(scale, ratio);
+        return BoostEnvelope.measure(
+            axis(motion), axis(this.velocity), axis(rotation),
+            axis(previous), axis(predicted),
+            this.scaling.get(), this.vertical.get()
+        );
     }
 
-    /**
-     * Returns how far one axis exceeds its bounds.
-     *
-     * @param value current axis motion
-     * @param low lower bound
-     * @param high upper bound
-     * @return exceedance ratio, 0 when inside the bounds
-     */
-    private double exceed(double value, double low, double high) {
-        if (value > high) return high > epsilon ? value / high : Double.MAX_VALUE;
-        if (value < low) return low < -epsilon ? value / low : Double.MAX_VALUE;
-
-        return 0.0;
+    private static BoostEnvelope.Axis axis(Vec3d vector) {
+        return new BoostEnvelope.Axis(vector.x, vector.y, vector.z);
     }
+
 
     //endregion
 
@@ -303,12 +258,12 @@ public class BoostBounds extends Module {
             this.mc.player.getPitch(), this.mc.player.getYaw()
         ).normalize();
 
-        Result result = this.limits(vanilla, rotation);
-        if (result == null || result.scale <= 1.0) return vanilla;
+        BoostEnvelope.Result result = this.limits(vanilla, rotation);
+        if (result == null || result.scale() <= 1.0) return vanilla;
 
-        this.scale = result.scale;
-        this.ratio = result.ratio;
-        return vanilla.multiply(1.0 / result.scale);
+        this.scale = result.scale();
+        this.ratio = result.ratio();
+        return vanilla.multiply(1.0 / result.scale());
     }
 
     /**
@@ -337,19 +292,6 @@ public class BoostBounds extends Module {
     public boolean bounded() {
         return this.bounded;
     }
-
-    //endregion
-
-    //region Data structures
-
-    /**
-     * Stores the measured exceedance and the prediction ratios.
-     *
-     * @param scale per-axis exceedance scale
-     * @param ratio measured motion to prediction ratio
-     * @param ratio measured motion to prediction ratio
-     */
-    private record Result(double scale, double ratio) {}
 
     //endregion
 }
