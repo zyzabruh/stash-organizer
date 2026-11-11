@@ -1,7 +1,9 @@
 package com.pro0101.stashorganizer;
 
 import com.mojang.logging.LogUtils;
+import com.pro0101.stashorganizer.hud.ChestCounterHud;
 import com.pro0101.stashorganizer.hud.DiscoveryHud;
+import com.pro0101.stashorganizer.hud.PresetPreviewHud;
 import com.pro0101.stashorganizer.hud.FlightHud;
 import com.pro0101.stashorganizer.hud.StashHud;
 import com.pro0101.stashorganizer.modules.bephax.AutoDyeShulkers;
@@ -103,6 +105,8 @@ public class StashOrganizerAddon extends MeteorAddon {
         Hud.get().register(StashHud.INFO);
         Hud.get().register(FlightHud.INFO);
         Hud.get().register(DiscoveryHud.INFO);
+        Hud.get().register(PresetPreviewHud.INFO);
+        Hud.get().register(ChestCounterHud.INFO);
 
         MeteorClient.EVENT_BUS.subscribe(this);
     }

@@ -264,6 +264,24 @@ public class Shaders extends Module {
     }
 
     /**
+     * Returns the active preset.
+     *
+     * @return shader mode
+     */
+    public Mode mode() {
+        return this.mode.get();
+    }
+
+    /**
+     * Returns the player outline colour, for previews.
+     *
+     * @return player colour
+     */
+    public SettingColor playerColor() {
+        return this.playersColor.get();
+    }
+
+    /**
      * Reports whether the chams chain should replace the vanilla outline effect.
      *
      * @return true when the chain is wanted

@@ -133,6 +133,24 @@ public class Skybox extends Module {
     }
 
     /**
+     * Returns the active preset.
+     *
+     * @return sky mode
+     */
+    public Mode mode() {
+        return this.mode.get();
+    }
+
+    /**
+     * Returns the tint applied to the sky, for previews.
+     *
+     * @return tint colour
+     */
+    public SettingColor tintColor() {
+        return this.tint.get();
+    }
+
+    /**
      * Reports whether the dark fog colour should be replaced.
      *
      * @return true when the fog colour follows the sky
