@@ -1,0 +1,4 @@
+accessWidener v2 named
+
+# RenderLayer.of is package private; the skybox needs a layer of its own.
+accessible method net/minecraft/client/render/RenderLayer of (Ljava/lang/String;Lnet/minecraft/client/render/RenderSetup;)Lnet/minecraft/client/render/RenderLayer;

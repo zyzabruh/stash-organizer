@@ -57,8 +57,12 @@ A dozen modules come from other Meteor addons and are distributed here under the
 the Hyperglide travel suite (`fast-frame`, `overview`, `navigation`, `auto-pilot`, `elytra-tweaks`, `bounce-fly`,
 `control-fly`, `air-place`, `mining-tweaks`), `shulker-sorter`, `sign-history`, `trail-follower` and `chunk-radar`
 from HunterBuddy, and `AutoDyeShulkers` from BepHax. See `CREDITS.md` for the repositories, commits and the changes made.
+`hotbar-refill` and `inventory-cleaner` also come from HunterBuddy: the first tops the held stack up from the main
+inventory before it runs out, the second throws out what a list does not keep, which is what a stash trip leaves
+behind.
 
-Later additions: `stash-brander`, `chest-index`, `better-stash-finder`, `search-area`, `fast-portal` and `easy-access`.
+Later additions: `stash-brander`, `chest-index`, `better-stash-finder`, `search-area`, `fast-portal`, `easy-access`,
+`hotbar-refill`, `inventory-cleaner` and `skybox`.
 
 `ChunkRadar` and `TrailFollower` need [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap),
 [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) and

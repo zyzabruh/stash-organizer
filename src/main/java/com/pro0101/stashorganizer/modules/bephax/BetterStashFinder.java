@@ -18,17 +18,29 @@ import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WMinus;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
+import meteordevelopment.meteorclient.events.render.Render3DEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.pathing.PathManagers;
+import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.Utils;
+import meteordevelopment.meteorclient.utils.render.RenderUtils;
+import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.render.MeteorToast;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.*;
 import net.minecraft.item.Items;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.ChunkSection;
+import net.minecraft.world.chunk.WorldChunk;
 import xaero.hud.minimap.BuiltInHudModules;
 import xaero.hud.minimap.module.MinimapSession;
 import xaero.hud.minimap.waypoint.set.WaypointSet;
@@ -51,6 +63,9 @@ public class BetterStashFinder extends Module
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgWaypoints = settings.createGroup("Waypoints");
     private final SettingGroup sgNotify = settings.createGroup("Notifications");
+    private final SettingGroup sgBlocks = settings.createGroup("Block Lists");
+    private final SettingGroup sgRender = settings.createGroup("Render");
+    private final SettingGroup sgCache = settings.createGroup("Cache");
 
     public List<Chunk> chunks = new ArrayList<>();
 
@@ -154,7 +169,221 @@ public class BetterStashFinder extends Module
         .build()
     );
 
+    private final Setting<Boolean> findBlocks = sgBlocks.add(new BoolSetting.Builder()
+        .name("block-lists")
+        .description("Also counts blocks from the lists below, so a stash whose containers were missed still shows up.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> scanBottom = sgBlocks.add(new IntSetting.Builder()
+        .name("scan-bottom-offset")
+        .description("Blocks above the world floor where the block scan starts.")
+        .defaultValue(0)
+        .min(0)
+        .sliderRange(0, 319)
+        .visible(findBlocks::get)
+        .build()
+    );
+
+    private final Setting<Integer> scanTop = sgBlocks.add(new IntSetting.Builder()
+        .name("scan-top-offset")
+        .description("Blocks below the world ceiling where the block scan stops.")
+        .defaultValue(0)
+        .min(0)
+        .sliderRange(0, 319)
+        .visible(findBlocks::get)
+        .build()
+    );
+
+    private final Setting<Boolean> firstList = sgBlocks.add(new BoolSetting.Builder()
+        .name("list-1")
+        .description("Counts the blocks of the first list.")
+        .defaultValue(true)
+        .visible(findBlocks::get)
+        .build()
+    );
+
+    private final Setting<List<Block>> firstBlocks = sgBlocks.add(new BlockListSetting.Builder()
+        .name("blocks-1")
+        .description("A chunk holding this many of any of these blocks is recorded.")
+        .defaultValue(
+            Blocks.SHULKER_BOX, Blocks.BLACK_SHULKER_BOX, Blocks.BLUE_SHULKER_BOX, Blocks.BROWN_SHULKER_BOX,
+            Blocks.CYAN_SHULKER_BOX, Blocks.GRAY_SHULKER_BOX, Blocks.GREEN_SHULKER_BOX, Blocks.LIGHT_BLUE_SHULKER_BOX,
+            Blocks.LIGHT_GRAY_SHULKER_BOX, Blocks.LIME_SHULKER_BOX, Blocks.MAGENTA_SHULKER_BOX,
+            Blocks.ORANGE_SHULKER_BOX, Blocks.PINK_SHULKER_BOX, Blocks.PURPLE_SHULKER_BOX, Blocks.RED_SHULKER_BOX,
+            Blocks.WHITE_SHULKER_BOX, Blocks.YELLOW_SHULKER_BOX, Blocks.ENDER_CHEST, Blocks.CRAFTER
+        )
+        .visible(() -> findBlocks.get() && firstList.get())
+        .build()
+    );
+
+    private final Setting<Integer> firstCount = sgBlocks.add(new IntSetting.Builder()
+        .name("count-1")
+        .description("How many blocks of the first list a chunk needs to be recorded.")
+        .defaultValue(8)
+        .min(1)
+        .sliderRange(1, 100)
+        .visible(() -> findBlocks.get() && firstList.get())
+        .build()
+    );
+
+    private final Setting<Boolean> secondList = sgBlocks.add(new BoolSetting.Builder()
+        .name("list-2")
+        .description("Counts the blocks of the second list.")
+        .defaultValue(true)
+        .visible(findBlocks::get)
+        .build()
+    );
+
+    private final Setting<List<Block>> secondBlocks = sgBlocks.add(new BlockListSetting.Builder()
+        .name("blocks-2")
+        .description("A chunk holding this many of any of these blocks is recorded.")
+        .defaultValue(
+            Blocks.DIAMOND_BLOCK, Blocks.NETHERITE_BLOCK, Blocks.EMERALD_BLOCK, Blocks.GOLD_BLOCK,
+            Blocks.IRON_BLOCK, Blocks.LAPIS_BLOCK, Blocks.REDSTONE_BLOCK, Blocks.QUARTZ_BLOCK
+        )
+        .visible(() -> findBlocks.get() && secondList.get())
+        .build()
+    );
+
+    private final Setting<Integer> secondCount = sgBlocks.add(new IntSetting.Builder()
+        .name("count-2")
+        .description("How many blocks of the second list a chunk needs to be recorded.")
+        .defaultValue(4)
+        .min(1)
+        .sliderRange(1, 100)
+        .visible(() -> findBlocks.get() && secondList.get())
+        .build()
+    );
+
+    private final Setting<Boolean> thirdList = sgBlocks.add(new BoolSetting.Builder()
+        .name("list-3")
+        .description("Counts the blocks of the third, custom list.")
+        .defaultValue(false)
+        .visible(findBlocks::get)
+        .build()
+    );
+
+    private final Setting<List<Block>> thirdBlocks = sgBlocks.add(new BlockListSetting.Builder()
+        .name("blocks-3")
+        .description("A chunk holding this many of any of these blocks is recorded.")
+        .defaultValue(List.of())
+        .visible(() -> findBlocks.get() && thirdList.get())
+        .build()
+    );
+
+    private final Setting<Integer> thirdCount = sgBlocks.add(new IntSetting.Builder()
+        .name("count-3")
+        .description("How many blocks of the third list a chunk needs to be recorded.")
+        .defaultValue(2)
+        .min(1)
+        .sliderRange(1, 100)
+        .visible(() -> findBlocks.get() && thirdList.get())
+        .build()
+    );
+
+    private final Setting<Boolean> render = sgRender.add(new BoolSetting.Builder()
+        .name("render")
+        .description("Draws a box around every recorded chunk near you.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Integer> renderDistance = sgRender.add(new IntSetting.Builder()
+        .name("render-distance")
+        .description("How many chunks from the player a recorded chunk is drawn.")
+        .defaultValue(128)
+        .min(6)
+        .sliderRange(6, 128)
+        .visible(render::get)
+        .build()
+    );
+
+    private final Setting<Integer> renderTop = sgRender.add(new IntSetting.Builder()
+        .name("render-top-y")
+        .description("Top of the drawn box.")
+        .defaultValue(256)
+        .sliderRange(-128, 512)
+        .visible(render::get)
+        .build()
+    );
+
+    private final Setting<Integer> renderBottom = sgRender.add(new IntSetting.Builder()
+        .name("render-bottom-y")
+        .description("Bottom of the drawn box.")
+        .defaultValue(150)
+        .sliderRange(-128, 512)
+        .visible(render::get)
+        .build()
+    );
+
+    private final Setting<Boolean> tracers = sgRender.add(new BoolSetting.Builder()
+        .name("tracers")
+        .description("Draws a line from the player to the recorded chunks.")
+        .defaultValue(true)
+        .visible(render::get)
+        .build()
+    );
+
+    private final Setting<Boolean> nearestTracer = sgRender.add(new BoolSetting.Builder()
+        .name("nearest-only")
+        .description("Draws only one tracer, to the closest recorded chunk.")
+        .defaultValue(true)
+        .visible(() -> render.get() && tracers.get())
+        .build()
+    );
+
+    private final Setting<Integer> tracerDistance = sgRender.add(new IntSetting.Builder()
+        .name("tracer-distance")
+        .description("How many chunks from the player a tracer is still drawn.")
+        .defaultValue(32)
+        .min(1)
+        .sliderRange(1, 1024)
+        .visible(() -> render.get() && tracers.get())
+        .build()
+    );
+
+    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+        .name("side-color")
+        .description("Fill color of the drawn boxes.")
+        .defaultValue(new SettingColor(255, 127, 0, 40))
+        .visible(render::get)
+        .build()
+    );
+
+    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+        .name("line-color")
+        .description("Outline and tracer color.")
+        .defaultValue(new SettingColor(255, 127, 0, 255))
+        .visible(render::get)
+        .build()
+    );
+
+    private final Setting<Boolean> clearDisable = sgCache.add(new BoolSetting.Builder()
+        .name("clear-on-disable")
+        .description("Drops the recorded chunks when the module is turned off. The saved files are kept.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> clearWorld = sgCache.add(new BoolSetting.Builder()
+        .name("clear-on-world-change")
+        .description("Drops the recorded chunks when you leave the world or change dimension. The saved files are kept.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> clearOutside = sgCache.add(new BoolSetting.Builder()
+        .name("clear-outside-render-distance")
+        .description("Drops a recorded chunk once it leaves the render distance above, so the list only holds what is around you.")
+        .defaultValue(false)
+        .build()
+    );
+
     private Chunk lastFound;
+
+    private RegistryKey<World> lastDimension;
 
     public BetterStashFinder()
     {
@@ -165,11 +394,14 @@ public class BetterStashFinder extends Module
     public void onActivate() {
         XaeroPlus.EVENT_BUS.register(this);
         load();
+        this.lastDimension = this.mc.world == null ? null : this.mc.world.getRegistryKey();
     }
 
     @Override
     public void onDeactivate() {
         XaeroPlus.EVENT_BUS.unregister(this);
+        if (clearDisable.get()) chunks.clear();
+        this.lastDimension = null;
     }
 
     @net.lenni0451.lambdaevents.EventHandler(priority = -1)
@@ -217,7 +449,11 @@ public class BetterStashFinder extends Module
             else if (blockEntity instanceof HopperBlockEntity) chunk.hoppers++;
         }
 
-        if ((chunk.getTotal() >= minimumStorageCount.get()) || (shulkerInstantHit.get() && chunk.shulkers > 0)) {
+        boolean listed = this.scan(event.chunk(), chunk);
+
+        if (chunk.getTotal() >= minimumStorageCount.get()
+            || (shulkerInstantHit.get() && chunk.shulkers > 0)
+            || listed) {
             Chunk prevChunk = null;
             int i = chunks.indexOf(chunk);
 
@@ -309,6 +545,176 @@ public class BetterStashFinder extends Module
         }
     }
 
+    /**
+     * Counts the blocks of every enabled list inside a chunk.
+     *
+     * <p>The container count only sees storage that is still a block entity. A stash emptied into
+     * shulker boxes, or a room whose chests were pulled out, leaves blocks behind that the storage
+     * pass cannot see, and those blocks are what tells the two apart.
+     *
+     * @param chunk chunk that was just received
+     * @param record record built for that chunk
+     * @return true when one of the lists reached its threshold
+     */
+    private boolean scan(WorldChunk chunk, Chunk record) {
+        if (!findBlocks.get()) return false;
+        if (this.mc.world == null) return false;
+
+        int bottom = this.mc.world.getBottomY() + scanBottom.get();
+        int top = this.mc.world.getTopYInclusive() - scanTop.get();
+
+        List<List<Block>> lists = List.of(firstBlocks.get(), secondBlocks.get(), thirdBlocks.get());
+        boolean[] active = {firstList.get(), secondList.get(), thirdList.get()};
+        int[] limits = {firstCount.get(), secondCount.get(), thirdCount.get()};
+        int[] counts = new int[lists.size()];
+
+        int base = this.mc.world.getBottomY();
+        ChunkSection[] sections = chunk.getSectionArray();
+
+        for (int index = 0; index < sections.length; index++) {
+            ChunkSection section = sections[index];
+            if (section == null || section.isEmpty()) continue;
+
+            int origin = base + index * 16;
+
+            for (int x = 0; x < 16; x++) {
+                for (int y = 0; y < 16; y++) {
+                    int worldY = origin + y;
+                    if (worldY < bottom || worldY > top) continue;
+
+                    for (int z = 0; z < 16; z++) {
+                        BlockState state = section.getBlockState(x, y, z);
+                        if (state.isAir()) continue;
+
+                        Block block = state.getBlock();
+
+                        for (int list = 0; list < lists.size(); list++) {
+                            if (!active[list] || lists.get(list).isEmpty()) continue;
+                            if (!lists.get(list).contains(block)) continue;
+
+                            counts[list]++;
+                        }
+                    }
+                }
+            }
+        }
+
+        int best = -1;
+
+        for (int list = 0; list < counts.length; list++) {
+            if (!active[list] || lists.get(list).isEmpty()) continue;
+            if (counts[list] < limits[list]) continue;
+
+            if (best == -1 || counts[list] > counts[best]) best = list;
+        }
+
+        if (best == -1) return false;
+
+        record.blocks = counts[best];
+        record.list = best + 1;
+        return true;
+    }
+
+    /**
+     * Draws the recorded chunks around the player.
+     *
+     * @param event render event
+     */
+    @meteordevelopment.orbit.EventHandler
+    private void onRender(Render3DEvent event) {
+        if (!render.get() || this.mc.player == null || chunks.isEmpty()) return;
+
+        int top = renderTop.get();
+        int bottom = renderBottom.get();
+        double reach = renderDistance.get() * 16.0;
+
+        Chunk nearest = null;
+        double closest = Double.MAX_VALUE;
+
+        for (Chunk chunk : chunks) {
+            double dx = chunk.x - this.mc.player.getX();
+            double dz = chunk.z - this.mc.player.getZ();
+            double distance = dx * dx + dz * dz;
+
+            if (distance <= reach * reach && distance < closest) {
+                nearest = chunk;
+                closest = distance;
+            }
+        }
+
+        if (nearest == null) return;
+
+        for (Chunk chunk : chunks) {
+            double dx = chunk.x - this.mc.player.getX();
+            double dz = chunk.z - this.mc.player.getZ();
+            if (dx * dx + dz * dz > reach * reach) continue;
+
+            Box box = new Box(
+                chunk.x - 8, bottom, chunk.z - 8,
+                chunk.x + 8, top, chunk.z + 8
+            );
+
+            event.renderer.box(box, sideColor.get(), lineColor.get(), ShapeMode.Sides, 0);
+        }
+
+        if (!tracers.get()) return;
+
+        double line = tracerDistance.get() * 16.0;
+
+        for (Chunk chunk : chunks) {
+            if (nearestTracer.get() && chunk != nearest) continue;
+
+            double dx = chunk.x - this.mc.player.getX();
+            double dz = chunk.z - this.mc.player.getZ();
+            if (dx * dx + dz * dz > line * line) continue;
+
+            event.renderer.line(
+                RenderUtils.center.x, RenderUtils.center.y, RenderUtils.center.z,
+                chunk.x, (bottom + top) / 2.0, chunk.z, lineColor.get()
+            );
+        }
+    }
+
+    /**
+     * Applies the cache policies that need a tick.
+     *
+     * @param event pre-tick event
+     */
+    @meteordevelopment.orbit.EventHandler
+    private void onTick(TickEvent.Pre event) {
+        if (this.mc.world == null || this.mc.player == null) return;
+
+        RegistryKey<World> dimension = this.mc.world.getRegistryKey();
+
+        if (this.lastDimension == null) {
+            this.lastDimension = dimension;
+        } else if (!this.lastDimension.equals(dimension)) {
+            this.lastDimension = dimension;
+            if (clearWorld.get()) chunks.clear();
+        }
+
+        if (!clearOutside.get()) return;
+
+        double reach = renderDistance.get() * 16.0;
+
+        chunks.removeIf(chunk -> {
+            double dx = chunk.x - this.mc.player.getX();
+            double dz = chunk.z - this.mc.player.getZ();
+            return dx * dx + dz * dz > reach * reach;
+        });
+    }
+
+    /**
+     * Drops the recorded chunks when the connection ends.
+     *
+     * @param event game left event
+     */
+    @meteordevelopment.orbit.EventHandler
+    private void onGameLeft(GameLeftEvent event) {
+        if (clearWorld.get()) chunks.clear();
+        this.lastDimension = null;
+    }
+
     public int stashCount() {
         return chunks.size();
     }
@@ -348,6 +754,7 @@ public class BetterStashFinder extends Module
         for (Chunk chunk : chunks) {
             table.add(theme.label("Pos: " + chunk.x + ", " + chunk.z));
             table.add(theme.label("Total: " + chunk.getTotal()));
+            if (chunk.blocks > 0) table.add(theme.label("Listed: " + chunk.blocks));
 
             WButton open = table.add(theme.button("Open")).widget();
             open.action = () -> mc.setScreen(new ChunkScreen(theme, chunk));
@@ -575,6 +982,7 @@ public class BetterStashFinder extends Module
         public ChunkPos chunkPos;
         public transient int x, z;
         public int chests, barrels, shulkers, enderChests, furnaces, dispensersDroppers, hoppers;
+        public int blocks, list;
 
         public Chunk(ChunkPos chunkPos) {
             this.chunkPos = chunkPos;
@@ -665,6 +1073,13 @@ public class BetterStashFinder extends Module
 
             t.add(theme.label("Hoppers:"));
             t.add(theme.label(chunk.hoppers + ""));
+            t.row();
+
+            if (chunk.blocks > 0) {
+                t.add(theme.label("Listed blocks:"));
+                t.add(theme.label(chunk.blocks + " (list " + chunk.list + ")"));
+                t.row();
+            }
         }
     }
 }

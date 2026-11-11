@@ -53,6 +53,9 @@ code) is original work.
   ported from HunterBuddy's `ElytraBounce` and `BounceHazards` (`4cae4b1`, GPL-3.0). The clear hold itself is this
   addon's `GlideClearHold`, shared with `Pitch40`. Pitch solving from that module is not imported; its chestplate
   fakefly is, as the off-by-default `chestplate-fakefly` option.
+- `HotbarRefill` and `InventoryCleaner` are ported from HunterBuddy with this addon's category, formatting and javadocs;
+  their settings and behaviour are unchanged, except that `HotbarRefill` matches a firework by its whole component set
+  instead of a plain-rocket helper that is not imported here.
 - Xaero's Minimap, World Map and XaeroPlus are `modCompileOnly` dependencies (`25.3.10`, `1.40.11`, `2.30.8`): the
   two Xaero modules need them at runtime and none of their code is bundled in this jar. The addon checks for those
   classes and only then registers `trail-follower` and `chunk-radar` by name, so a missing Xaero disables two modules

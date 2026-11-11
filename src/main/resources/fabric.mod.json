@@ -21,6 +21,7 @@
   "mixins": [
     "stash-organizer.mixins.json"
   ],
+  "accessWidener": "stash-organizer.accesswidener",
   "custom": {
     "meteor-client:color": "90,200,120",
     "modmenu": {
