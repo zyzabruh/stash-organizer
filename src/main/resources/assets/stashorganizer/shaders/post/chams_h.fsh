@@ -3,13 +3,13 @@
 // Horizontal half of the glow. The silhouette is blurred with a gaussian kernel and kept
 // premultiplied: colour is accumulated weighted by alpha and divided back at the end, so the halo
 // that reaches the composite keeps the outline colour instead of fading towards black.
+//
+// The texel size comes from textureSize rather than from the SamplerInfo block. SamplerInfo is
+// filled by the game for its own effects, but a pipeline built in code has no guarantees about it,
+// and an empty InSize turns every offset into a whole screen: the halo then samples pixels that hold
+// nothing and the result is invisible.
 
 uniform sampler2D InSampler;
-
-layout(std140) uniform SamplerInfo {
-    vec2 OutSize;
-    vec2 InSize;
-};
 
 layout(std140) uniform DilateConfig {
     int glowRadius;
@@ -20,7 +20,7 @@ in vec2 texCoord;
 out vec4 fragColor;
 
 void main() {
-    vec2 texel = 1.0 / max(InSize, vec2(1.0));
+    vec2 texel = 1.0 / max(vec2(textureSize(InSampler, 0)), vec2(1.0));
 
     // A narrow kernel for a small radius keeps the halo close to the silhouette; widening the
     // radius softens it instead of turning it into a hard ring.

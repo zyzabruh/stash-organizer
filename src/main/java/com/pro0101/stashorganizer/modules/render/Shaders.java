@@ -4,6 +4,7 @@ import com.pro0101.stashorganizer.StashOrganizerAddon;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -23,17 +24,35 @@ import net.minecraft.entity.vehicle.HopperMinecartEntity;
 import net.minecraft.entity.vehicle.MinecartEntity;
 
 /**
- * Outlines entities through walls, one colour per kind.
+ * Draws a glowing, filled outline around entities, one colour per kind.
  *
  * <p>Nothing is re-rendered: the module only answers two vanilla questions. {@code isGlowing}
  * decides whether an entity owns an outline at all, and {@code getTeamColorValue} decides its
  * colour, both of which vanilla already asks once per entity and per frame. Forcing those answers
- * keeps the whole vanilla outline pass, its depth handling and its post effect, instead of building
- * a second renderer beside it.
+ * keeps the whole vanilla outline pass and its depth handling, and the chams chain in
+ * {@link com.pro0101.stashorganizer.render.ChamsChain} replaces only the effect applied to the
+ * silhouettes it produces.
  *
- * <p>Textured chams are a different pass, already covered by Meteor's own {@code Chams} module.
+ * <p>Three layers make the picture, and each one switches independently: a solid rim of
+ * {@code outline-width} pixels, a soft halo of {@code glow-radius}, and a translucent fill of the
+ * body at {@code fill-alpha}. The modes preset those three rather than replacing them, so a preset
+ * can still be tuned.
  */
-public class EntityGlow extends Module {
+public class Shaders extends Module {
+    /** Presets that decide which of the three layers are drawn. */
+    public enum Mode {
+        /** Solid rim only. */
+        Outline,
+        /** Soft halo only. */
+        Glow,
+        /** Translucent body only, the see-through look. */
+        Chams,
+        /** Rim, halo and body together. */
+        Full,
+        /** The individual switches below decide. */
+        Custom
+    }
+
     private final SettingGroup general = this.settings.getDefaultGroup();
     private final SettingGroup colors = this.settings.createGroup("Colors");
     private final SettingGroup chain = this.settings.createGroup("Chain");
@@ -101,6 +120,14 @@ public class EntityGlow extends Module {
         .build()
     );
 
+    private final Setting<Double> range = this.general.add(new DoubleSetting.Builder()
+        .name("range")
+        .description("Only entities within this distance are outlined. Zero removes the limit.")
+        .defaultValue(128.0)
+        .range(0.0, 512.0)
+        .build()
+    );
+
     private final Setting<SettingColor> playersColor = this.colors.add(new ColorSetting.Builder()
         .name("players-color")
         .description("Outline colour for players.")
@@ -150,11 +177,28 @@ public class EntityGlow extends Module {
         .build()
     );
 
+    private final Setting<Mode> mode = this.chain.add(new EnumSetting.Builder<Mode>()
+        .name("mode")
+        .description("Outline, Glow, Chams and Full preset the three layers; Custom leaves them to the switches below.")
+        .defaultValue(Mode.Full)
+        .visible(this.customChain::get)
+        .build()
+    );
+
+    private final Setting<Integer> outlineWidth = this.chain.add(new IntSetting.Builder()
+        .name("outline-width")
+        .description("Thickness of the solid rim in pixels. Zero leaves only the glow and the fill.")
+        .defaultValue(1)
+        .range(0, 6)
+        .visible(() -> this.customChain.get() && this.usesRim())
+        .build()
+    );
+
     private final Setting<Boolean> glow = this.chain.add(new BoolSetting.Builder()
         .name("glow")
         .description("Widen the outline into a halo.")
         .defaultValue(true)
-        .visible(this.customChain::get)
+        .visible(() -> this.customChain.get() && this.mode.get() == Mode.Custom)
         .build()
     );
 
@@ -163,7 +207,7 @@ public class EntityGlow extends Module {
         .description("Halo radius in pixels. Every step costs another pair of texture reads per pixel, so keep it small.")
         .defaultValue(2)
         .range(0, 12)
-        .visible(() -> this.customChain.get() && this.glow.get())
+        .visible(() -> this.customChain.get() && this.usesGlow())
         .build()
     );
 
@@ -172,7 +216,7 @@ public class EntityGlow extends Module {
         .description("How strongly the halo shows.")
         .defaultValue(1.5)
         .range(0, 3)
-        .visible(() -> this.customChain.get() && this.glow.get())
+        .visible(() -> this.customChain.get() && this.usesGlow())
         .build()
     );
 
@@ -180,7 +224,7 @@ public class EntityGlow extends Module {
         .name("fill")
         .description("Fill the silhouette with a semi-transparent colour.")
         .defaultValue(true)
-        .visible(this.customChain::get)
+        .visible(() -> this.customChain.get() && this.mode.get() == Mode.Custom)
         .build()
     );
 
@@ -189,12 +233,21 @@ public class EntityGlow extends Module {
         .description("Opacity of the filled silhouette.")
         .defaultValue(0.4)
         .range(0, 1)
-        .visible(() -> this.customChain.get() && this.fill.get())
+        .visible(() -> this.customChain.get() && this.usesFill())
         .build()
     );
 
-    public EntityGlow() {
-        super(StashOrganizerAddon.CATEGORY, "entity-glow", "Outlines players, mobs and storage entities through walls, with a colour per kind.");
+    private final Setting<Double> fillBrightness = this.chain.add(new DoubleSetting.Builder()
+        .name("fill-brightness")
+        .description("Multiplies the body colour, so the fill can sit darker than the rim it belongs to.")
+        .defaultValue(1.0)
+        .range(0, 2)
+        .visible(() -> this.customChain.get() && this.usesFill())
+        .build()
+    );
+
+    public Shaders() {
+        super(StashOrganizerAddon.CATEGORY, "shaders", "Outlines players, mobs and storage entities through walls, with a glow, a rim and a fill.");
     }
 
     /**
@@ -209,28 +262,61 @@ public class EntityGlow extends Module {
     /**
      * Returns the glow radius to hand to the chain.
      *
-     * @return radius in pixels, zero when the glow is off
+     * @return radius in pixels, zero when the preset has no halo
      */
     public int chainGlowRadius() {
-        return this.glow.get() ? this.glowRadius.get() : 0;
+        return switch (this.mode.get()) {
+            case Glow, Full -> this.glowRadius.get();
+            case Custom -> this.glow.get() ? this.glowRadius.get() : 0;
+            default -> 0;
+        };
     }
 
     /**
      * Returns the glow intensity to hand to the chain.
      *
-     * @return intensity, zero when the glow is off
+     * @return intensity, zero when the preset has no halo
      */
     public float chainGlowIntensity() {
-        return this.glow.get() ? this.glowIntensity.get().floatValue() : 0.0F;
+        return switch (this.mode.get()) {
+            case Glow, Full -> this.glowIntensity.get().floatValue();
+            case Custom -> this.glow.get() ? this.glowIntensity.get().floatValue() : 0.0F;
+            default -> 0.0F;
+        };
     }
 
     /**
      * Returns the fill opacity to hand to the chain.
      *
-     * @return opacity, zero when the fill is off
+     * @return opacity, zero when the preset has no fill
      */
     public float chainFillAlpha() {
-        return this.fill.get() ? this.fillAlpha.get().floatValue() : 0.0F;
+        return switch (this.mode.get()) {
+            case Chams, Full -> this.fillAlpha.get().floatValue();
+            case Custom -> this.fill.get() ? this.fillAlpha.get().floatValue() : 0.0F;
+            default -> 0.0F;
+        };
+    }
+
+    /**
+     * Returns the rim thickness to hand to the chain.
+     *
+     * @return thickness in pixels, zero when the preset has no rim
+     */
+    public int chainOutlineWidth() {
+        return switch (this.mode.get()) {
+            case Outline, Full, Custom -> this.outlineWidth.get();
+            default -> 0;
+        };
+    }
+
+    /**
+     * Returns the body brightness to hand to the chain.
+     *
+     * @return multiplier applied to the fill colour
+     */
+    public float chainFillBrightness() {
+        return this.fillBrightness.get().floatValue();
     }
 
     /**
@@ -266,6 +352,26 @@ public class EntityGlow extends Module {
         return (color.a << 24) | (color.r << 16) | (color.g << 8) | color.b;
     }
 
+    private boolean usesRim() {
+        return this.mode.get() != Mode.Glow && this.mode.get() != Mode.Chams;
+    }
+
+    private boolean usesGlow() {
+        Mode current = this.mode.get();
+
+        if (current == Mode.Custom) return this.glow.get();
+
+        return current == Mode.Glow || current == Mode.Full;
+    }
+
+    private boolean usesFill() {
+        Mode current = this.mode.get();
+
+        if (current == Mode.Custom) return this.fill.get();
+
+        return current == Mode.Chams || current == Mode.Full;
+    }
+
     /** Categories the module knows how to outline. */
     private enum Kind {
         Player,
@@ -279,7 +385,7 @@ public class EntityGlow extends Module {
     }
 
     /**
-     * Classifies an entity against the enabled categories.
+     * Classifies an entity against the enabled categories and the distance limit.
      *
      * @param entity entity to classify
      * @return its category, or null when it is not targeted
@@ -290,6 +396,12 @@ public class EntityGlow extends Module {
         MinecraftClient client = MinecraftClient.getInstance();
 
         if (entity == client.player) return this.self.get() ? Kind.Player : null;
+
+        double limit = this.range.get();
+        if (limit > 0.0 && client.player != null
+            && entity.squaredDistanceTo(client.player) > limit * limit) {
+            return null;
+        }
 
         // The order matters: a chest minecart is both a minecart and a storage entity.
         if (entity instanceof ChestMinecartEntity || entity instanceof HopperMinecartEntity) {

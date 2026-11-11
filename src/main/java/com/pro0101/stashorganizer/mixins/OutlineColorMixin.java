@@ -1,6 +1,6 @@
 package com.pro0101.stashorganizer.mixins;
 
-import com.pro0101.stashorganizer.modules.render.EntityGlow;
+import com.pro0101.stashorganizer.modules.render.Shaders;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.render.OutlineVertexConsumerProvider;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,7 +24,7 @@ public abstract class OutlineColorMixin {
      */
     @ModifyVariable(method = "setColor", at = @At("HEAD"), argsOnly = true)
     private int stashorganizer$outlineColor(int color) {
-        EntityGlow module = Modules.get().get(EntityGlow.class);
+        Shaders module = Modules.get().get(Shaders.class);
 
         if (module == null || !module.isActive()) return color;
         if (color != -1) return color;

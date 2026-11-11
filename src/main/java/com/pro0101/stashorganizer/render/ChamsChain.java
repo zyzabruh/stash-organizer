@@ -54,8 +54,10 @@ public final class ChamsChain {
     private static PostEffectProcessor cached;
 
     private static int lastRadius = Integer.MIN_VALUE;
+    private static int lastOutlineWidth = Integer.MIN_VALUE;
     private static float lastIntensity = Float.NaN;
     private static float lastFill = Float.NaN;
+    private static float lastFillBrightness = Float.NaN;
     private static int lastWidth = -1;
     private static int lastHeight = -1;
     private static boolean loggedFailure;
@@ -70,19 +72,22 @@ public final class ChamsChain {
      * @param radius glow radius in pixels
      * @param intensity glow strength
      * @param fillAlpha opacity of the solid fill
+     * @param outlineWidth rim thickness in pixels
+     * @param fillBrightness multiplier applied to the body colour
      * @return the chain, or null when it could not be built
      */
-    public static PostEffectProcessor get(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha) {
+    public static PostEffectProcessor get(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha, int outlineWidth, float fillBrightness) {
         MinecraftClient client = MinecraftClient.getInstance();
         int width = client.getWindow().getFramebufferWidth();
         int height = client.getWindow().getFramebufferHeight();
 
         if (radius == lastRadius && intensity == lastIntensity && fillAlpha == lastFill
+            && outlineWidth == lastOutlineWidth && fillBrightness == lastFillBrightness
             && width == lastWidth && height == lastHeight) {
             return cached;
         }
 
-        PostEffectProcessor rebuilt = build(externalTargets, radius, intensity, fillAlpha);
+        PostEffectProcessor rebuilt = build(externalTargets, radius, intensity, fillAlpha, outlineWidth, fillBrightness);
 
         if (rebuilt == null) {
             // Remember the failing key so a broken shader is not recompiled on every frame; the
@@ -90,6 +95,8 @@ public final class ChamsChain {
             lastRadius = radius;
             lastIntensity = intensity;
             lastFill = fillAlpha;
+            lastFillBrightness = fillBrightness;
+            lastOutlineWidth = outlineWidth;
             lastWidth = width;
             lastHeight = height;
 
@@ -102,6 +109,8 @@ public final class ChamsChain {
         lastRadius = radius;
         lastIntensity = intensity;
         lastFill = fillAlpha;
+        lastFillBrightness = fillBrightness;
+        lastOutlineWidth = outlineWidth;
         lastWidth = width;
         lastHeight = height;
 
@@ -115,9 +124,11 @@ public final class ChamsChain {
      * @param radius glow radius in pixels
      * @param intensity glow strength
      * @param fillAlpha opacity of the solid fill
+     * @param outlineWidth rim thickness in pixels
+     * @param fillBrightness multiplier applied to the body colour
      * @return the chain, or null when loading failed
      */
-    private static PostEffectProcessor build(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha) {
+    private static PostEffectProcessor build(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha, int outlineWidth, float fillBrightness) {
         try {
             if (projection == null) {
                 projection = new ProjectionMatrix2("stash-organizer chams", 0.1F, 1000.0F, false);
@@ -138,9 +149,11 @@ public final class ChamsChain {
                 ),
                 OUTLINE_TARGET,
                 Map.of("ChamsConfig", List.of(
+                    new UniformValue.IntValue(outlineWidth),
                     new UniformValue.IntValue(radius),
                     new UniformValue.FloatValue(intensity),
-                    new UniformValue.FloatValue(fillAlpha)
+                    new UniformValue.FloatValue(fillAlpha),
+                    new UniformValue.FloatValue(fillBrightness)
                 ))
             );
 
@@ -171,8 +184,10 @@ public final class ChamsChain {
 
         loggedFailure = false;
         lastRadius = Integer.MIN_VALUE;
+        lastOutlineWidth = Integer.MIN_VALUE;
         lastIntensity = Float.NaN;
         lastFill = Float.NaN;
+        lastFillBrightness = Float.NaN;
         lastWidth = -1;
         lastHeight = -1;
     }

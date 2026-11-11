@@ -1,6 +1,6 @@
 package com.pro0101.stashorganizer.mixins;
 
-import com.pro0101.stashorganizer.modules.render.EntityGlow;
+import com.pro0101.stashorganizer.modules.render.Shaders;
 import com.pro0101.stashorganizer.render.ChamsChain;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.gl.PostEffectProcessor;
@@ -39,11 +39,12 @@ public abstract class EntityOutlineChainMixin {
         )
     )
     private PostEffectProcessor stashorganizer$chamsChain(ShaderLoader loader, Identifier id, Set<Identifier> targets) {
-        EntityGlow module = Modules.get().get(EntityGlow.class);
+        Shaders module = Modules.get().get(Shaders.class);
 
         if (module != null && module.isActive() && module.usesChain() && ChamsChain.OUTLINE_TARGET.equals(id)) {
             PostEffectProcessor chain = ChamsChain.get(
-                targets, module.chainGlowRadius(), module.chainGlowIntensity(), module.chainFillAlpha()
+                targets, module.chainGlowRadius(), module.chainGlowIntensity(),
+                module.chainFillAlpha(), module.chainOutlineWidth(), module.chainFillBrightness()
             );
 
             if (chain != null) return chain;

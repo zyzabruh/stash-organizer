@@ -1,6 +1,6 @@
 package com.pro0101.stashorganizer.mixins;
 
-import com.pro0101.stashorganizer.modules.render.EntityGlow;
+import com.pro0101.stashorganizer.modules.render.Shaders;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Answers vanilla's two outline questions for the entities {@link EntityGlow} targets.
+ * Answers vanilla's two outline questions for the entities {@link Shaders} targets.
  *
  * <p>Vanilla asks {@code isGlowing} whether an entity gets an outline, and {@code getTeamColorValue}
  * which colour it takes, both once per rendered entity. Answering here keeps the vanilla outline
@@ -24,7 +24,7 @@ public abstract class EntityGlowMixin {
      */
     @Inject(method = "isGlowing", at = @At("HEAD"), cancellable = true)
     private void stashorganizer$forceGlowing(CallbackInfoReturnable<Boolean> info) {
-        EntityGlow module = Modules.get().get(EntityGlow.class);
+        Shaders module = Modules.get().get(Shaders.class);
 
         if (module == null || !module.isActive()) return;
         if (module.shouldGlow((Entity) (Object) this)) info.setReturnValue(true);
@@ -37,7 +37,7 @@ public abstract class EntityGlowMixin {
      */
     @Inject(method = "getTeamColorValue", at = @At("RETURN"), cancellable = true)
     private void stashorganizer$outlineColor(CallbackInfoReturnable<Integer> info) {
-        EntityGlow module = Modules.get().get(EntityGlow.class);
+        Shaders module = Modules.get().get(Shaders.class);
 
         if (module == null || !module.isActive()) return;
 

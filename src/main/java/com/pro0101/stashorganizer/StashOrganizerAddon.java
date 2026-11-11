@@ -26,7 +26,7 @@ import com.pro0101.stashorganizer.modules.hyperglide.RocketCycle;
 import com.pro0101.stashorganizer.modules.hyperglide.ControlFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ElytraTweaks;
 import com.pro0101.stashorganizer.modules.hyperglide.EasyAccess;
-import com.pro0101.stashorganizer.modules.render.EntityGlow;
+import com.pro0101.stashorganizer.modules.render.Shaders;
 import com.pro0101.stashorganizer.modules.render.Skybox;
 import com.pro0101.stashorganizer.modules.hyperglide.FastPortal;
 import com.pro0101.stashorganizer.modules.hyperglide.FastFrame;
@@ -75,7 +75,7 @@ public class StashOrganizerAddon extends MeteorAddon {
         Modules.get().add(new HotbarRefill());
         Modules.get().add(new InventoryCleaner());
         Modules.get().add(new Skybox());
-        Modules.get().add(new EntityGlow());
+        Modules.get().add(new Shaders());
         Modules.get().add(new RocketFly());
         Modules.get().add(new Pitch40());
         Modules.get().add(new ElytraRecast());
