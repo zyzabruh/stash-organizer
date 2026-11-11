@@ -51,8 +51,8 @@ code) is original work.
 - `BounceFly` keeps its Hyperglide origin. Its glide-clear recovery, `pause-after-setback`, `stop-near-entities`,
   the loaded-chunk guard on the Baritone goal, and the opt-in `hold-glide-clear` / `fake-lag` network emulation are
   ported from HunterBuddy's `ElytraBounce` and `BounceHazards` (`4cae4b1`, GPL-3.0). The clear hold itself is this
-  addon's `GlideClearHold`, shared with `Pitch40`. Pitch solving and chestplate fakefly from that module are not
-  imported.
+  addon's `GlideClearHold`, shared with `Pitch40`. Pitch solving from that module is not imported; its chestplate
+  fakefly is, as the off-by-default `chestplate-fakefly` option.
 - Xaero's Minimap, World Map and XaeroPlus are `modCompileOnly` dependencies (`25.3.10`, `1.40.11`, `2.30.8`): the
   two Xaero modules need them at runtime and none of their code is bundled in this jar. The addon checks for those
   classes and only then registers `trail-follower` and `chunk-radar` by name, so a missing Xaero disables two modules

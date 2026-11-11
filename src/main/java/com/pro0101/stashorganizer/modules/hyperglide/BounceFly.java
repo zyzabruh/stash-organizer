@@ -2,11 +2,14 @@ package com.pro0101.stashorganizer.modules.hyperglide;
 
 import com.pro0101.stashorganizer.StashOrganizerAddon;
 import com.pro0101.stashorganizer.modules.huntbuddy.util.GlideClearHold;
+import com.pro0101.stashorganizer.modules.huntbuddy.util.GliderSwap;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Baritone;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Client;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Elytra;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Player;
+import meteordevelopment.meteorclient.events.entity.player.SendMovementPacketsEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
+import meteordevelopment.meteorclient.events.world.PlaySoundEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -18,16 +21,23 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPosition;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.item.ItemStack;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.network.packet.s2c.play.PositionFlag;
+import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -243,6 +253,16 @@ public class BounceFly extends Module {
         .build()
     );
 
+    private final Setting<Boolean> fakeFly = this.general.add(new BoolSetting.Builder()
+        .name("chestplate-fakefly")
+        .description("Bounces with a chestplate worn and the elytra in a hand: each re-deploy swaps the elytra in, starts the glide and swaps the chestplate straight back inside the same tick, so the elytra is never worn across a landing and takes no durability. Needs the pair, one worn and the other in either hand. Off by default: the swap is a desync the server can log.")
+        .defaultValue(false)
+        .onChanged(value -> {
+            if (!value) this.cleanFakeFly();
+        })
+        .build()
+    );
+
     private final Setting<Boolean> freelook = this.general.add(new BoolSetting.Builder()
         .name("freelook")
         .description("Keeps the camera on its own rotation while the module steers the player. Meteor's freecam cannot do this here: it derives its angle from the player rotation, which this module rewrites every tick.")
@@ -283,6 +303,21 @@ public class BounceFly extends Module {
     private boolean held;
 
     private int rollbacks;
+
+    private Hand fakeHand;
+    private int fakePending = -1;
+    private long fakeAcked = -1L;
+    private int fakeSent = -1;
+    private long fakeSentAge = Long.MIN_VALUE / 2;
+    private int fakeServer = -1;
+    private boolean fakeDesync;
+    private boolean fakeArmed;
+    private boolean fakeWant;
+    private String fakeBlocked;
+    private boolean fakePair = true;
+    private boolean fakeLastGround = true;
+    private boolean fakePrevGround = true;
+    private long fakeStartAge = Long.MIN_VALUE / 2;
 
     private float viewYaw;
     private float viewPitch;
@@ -331,6 +366,8 @@ public class BounceFly extends Module {
         this.lagTicks = 0;
         this.rollbacks = 0;
         this.groundY = this.mc.player.getY();
+
+        this.cleanFakeFly();
     }
 
     /**
@@ -371,6 +408,7 @@ public class BounceFly extends Module {
         this.lagTicks = 0;
 
         GlideClearHold.release(this);
+        this.cleanFakeFly();
         this.flush();
     }
 
@@ -389,6 +427,7 @@ public class BounceFly extends Module {
 
         this.serviceClear();
         this.serviceLag();
+        this.serviceFakeFly();
 
         if (!this.available()) return;
 
@@ -441,6 +480,8 @@ public class BounceFly extends Module {
     private void onReceive(PacketEvent.Receive event) {
         if (!this.isActive()) return;
 
+        this.intakeFakeFly(event);
+
         if (event.packet instanceof PlayerPositionLookS2CPacket packet) {
             if (!this.rollback(packet)) return;
 
@@ -465,6 +506,8 @@ public class BounceFly extends Module {
      */
     @EventHandler
     private void onSend(PacketEvent.Send event) {
+        this.trackFakeFly(event);
+
         if (this.flushing) return;
         if (!this.holding()) return;
 
@@ -476,6 +519,39 @@ public class BounceFly extends Module {
 
         this.queue.add(event.packet);
         event.cancel();
+    }
+
+    /**
+     * Swaps the chestplate back in before the tick's movement packets leave.
+     *
+     * <p>The burst has to be undone in the same tick it starts in: the glide is already running,
+     * and the next tick cannot begin with the elytra still worn or the landing would cost it
+     * durability, which is the whole point of the option.
+     *
+     * @param event movement packet event
+     */
+    @EventHandler
+    private void onSendMovement(SendMovementPacketsEvent.Pre event) {
+        if (this.fakeHand == null || this.mc.player == null) return;
+
+        Hand hand = this.fakeHand;
+        this.fakeHand = null;
+
+        this.swapFakeFly(hand);
+    }
+
+    /**
+     * Silences the armour equip sound while the pair is being swapped.
+     *
+     * <p>Only the local sound is dropped; the server still sees the swap.
+     *
+     * @param event sound event
+     */
+    @EventHandler
+    private void onPlaySound(PlaySoundEvent event) {
+        if (!this.fakeFly.get() || event.sound == null) return;
+
+        if (GliderSwap.isSwapSound(event.sound.getId())) event.cancel();
     }
 
     //endregion
@@ -569,6 +645,257 @@ public class BounceFly extends Module {
 
     //endregion
 
+    //region Chestplate fakefly
+
+    /**
+     * Runs the chestplate fakefly one tick at a time.
+     *
+     * <p>The elytra spends the hop in a hand and the chestplate on the chest. A re-deploy swaps the
+     * elytra in, starts the glide and swaps the chestplate back before the tick's packets leave, so
+     * the elytra is never worn across a landing and takes no durability. The pair has to stay one
+     * worn and the other in a hand; while it is not, the module stops pressing, says why once, and
+     * resumes on its own once the pair is back.
+     */
+    private void serviceFakeFly() {
+        if (!this.fakeFly.get() || !this.enabled() || this.pause > 0) {
+            this.fakeHand = null;
+            this.fakePair = true;
+            return;
+        }
+
+        long age = this.mc.player.age;
+        boolean screen = this.mc.currentScreen instanceof HandledScreen<?>;
+
+        // A swap the server answered without the chest slot ending up where the swap asked for it
+        // is a refusal. Every burst after it would be built on an inventory the server does not
+        // have, so the module stops pressing until the player resyncs by hand.
+        if (this.fakePending >= 0 && this.fakeAcked >= 0 && age > this.fakeAcked) {
+            if (this.swapped()) {
+                this.fakePending = -1;
+                this.fakeAcked = -1L;
+            } else {
+                this.fakePending = -1;
+                this.fakeAcked = -1L;
+                this.fakeDesync = true;
+            }
+        }
+
+        if (this.fakeDesync) {
+            this.fakePair = false;
+            this.blocked(
+                "the server refused the chest swap, right-click the item in your hand to resync"
+            );
+            return;
+        }
+
+        ItemStack worn = this.mc.player.getEquippedStack(EquipmentSlot.CHEST);
+
+        if (GliderSwap.isGlider(worn)) {
+            this.fakePair = true;
+            this.fakeBlocked = null;
+
+            // Sending another swap on top of one the server has not acknowledged yet is what the
+            // check above ends up reading as a refusal, so the next one waits for the answer.
+            if (this.fakeSent > this.fakeServer && age - this.fakeSentAge < 10L) return;
+            if (screen || age % 2L != 0L) return;
+
+            Hand chest = GliderSwap.chestPieceHand(this.mc.player);
+
+            if (chest != null) {
+                this.swapFakeFly(chest);
+            } else if (this.mc.player.isOnGround()) {
+                int slot = this.chestSlot();
+
+                if (slot >= 0) {
+                    this.mc.player.getInventory().setSelectedSlot(slot);
+                    this.swapFakeFly(Hand.MAIN_HAND);
+                } else {
+                    this.blocked("chest piece must be in the hotbar");
+                }
+            }
+
+            return;
+        }
+
+        String problem = GliderSwap.pairProblem(this.mc.player);
+        Hand hand = GliderSwap.gliderHand(this.mc.player);
+
+        this.fakePair = problem == null && hand != null;
+
+        if (!this.fakePair) {
+            this.blocked(problem != null ? problem
+                : "chestplate-fakefly needs a glider and a chest piece, one worn and the other in a hand");
+            return;
+        }
+
+        if (!this.free() || this.mc.player.isGliding() || screen) return;
+
+        // Bursting on the tick the player left the ground, or straight after the last glide start,
+        // asks for a re-deploy the server is still answering.
+        if (age - this.fakeStartAge < 2L) return;
+        if (this.fakePrevGround || this.fakeLastGround) return;
+
+        this.swapFakeFly(hand);
+        this.fakeHand = hand;
+        this.force = true;
+    }
+
+    /**
+     * Swaps a hand item into the chest slot and remembers which side the swap asked for.
+     *
+     * @param hand hand holding the elytra or the chestplate
+     */
+    private void swapFakeFly(Hand hand) {
+        this.fakeWant = GliderSwap.isGlider(this.mc.player.getStackInHand(hand));
+        this.fakeArmed = true;
+
+        try {
+            GliderSwap.swapSilently(hand);
+        } finally {
+            this.fakeArmed = false;
+        }
+    }
+
+    /**
+     * Checks whether the chest slot holds what the last swap asked for.
+     *
+     * @return true when the swap took effect
+     */
+    private boolean swapped() {
+        ItemStack worn = this.mc.player.getEquippedStack(EquipmentSlot.CHEST);
+        return this.fakeWant ? GliderSwap.isGlider(worn) : GliderSwap.isChestPiece(worn);
+    }
+
+    /**
+     * Tracks the swap transactions the server has answered.
+     *
+     * @param event packet send event
+     */
+    private void trackFakeFly(PacketEvent.Send event) {
+        if (!this.fakeFly.get() || this.mc.player == null) return;
+
+        if (this.fakeArmed && event.packet instanceof PlayerInteractItemC2SPacket interact) {
+            this.fakePending = interact.getSequence();
+            this.fakeAcked = -1L;
+            this.fakeSent = interact.getSequence();
+            this.fakeSentAge = this.mc.player.age;
+        }
+
+        if (event.packet instanceof PlayerMoveC2SPacket move) {
+            this.fakePrevGround = this.fakeLastGround;
+            this.fakeLastGround = move.isOnGround();
+        } else if (event.packet instanceof ClientCommandC2SPacket command
+            && command.getMode() == ClientCommandC2SPacket.Mode.START_FALL_FLYING) {
+            this.fakeStartAge = this.mc.player.age;
+        }
+    }
+
+    /**
+     * Reads the server's answer to a swap.
+     *
+     * <p>Meteor fires the receive event on the netty thread, so the sequence is handed to the main
+     * thread before it is stored.
+     *
+     * @param event packet receive event
+     */
+    private void intakeFakeFly(PacketEvent.Receive event) {
+        if (!this.fakeFly.get() || this.mc.player == null) return;
+
+        if (event.packet instanceof InventoryS2CPacket inventory && inventory.syncId() == 0) {
+            this.fakePending = -1;
+            this.fakeAcked = -1L;
+            this.fakeDesync = false;
+        } else if (event.packet instanceof PlayerActionResponseS2CPacket ack) {
+            if (this.fakePending >= 0 && ack.sequence() >= this.fakePending) {
+                this.fakeAcked = this.mc.player.age;
+            }
+
+            int sequence = ack.sequence();
+            this.mc.execute(() -> this.fakeServer = sequence);
+        }
+    }
+
+    /**
+     * Checks whether fakefly has a glider to work with at all.
+     *
+     * <p>Without one the option is not a reason to keep driving the player forward: the elytra is
+     * either worn, in a hand, or in the inventory somewhere reachable.
+     *
+     * @return true when a usable glider is available
+     */
+    private boolean glider() {
+        return this.fakeFly.get() && GliderSwap.hasGlider(this.mc.player);
+    }
+
+    /**
+     * Checks whether bounce input may be produced with the pair as it stands.
+     *
+     * @return true when the fakefly pair is ready, or the option is off
+     */
+    private boolean ready() {
+        return !this.fakeFly.get() || this.fakePair;
+    }
+
+    /**
+     * Checks whether a re-deploy can be made on this tick.
+     *
+     * @return true when nothing is holding the jump
+     */
+    private boolean free() {
+        return !this.mc.player.isOnGround()
+            && this.mc.player.age > this.pressAge
+            && !this.held;
+    }
+
+    /**
+     * Finds a chestplate in the hotbar.
+     *
+     * @return matching hotbar slot, or -1 when unavailable
+     */
+    private int chestSlot() {
+        for (int slot = 0; slot < 9; slot++) {
+            if (GliderSwap.isChestPiece(this.mc.player.getInventory().getStack(slot))) {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
+    /**
+     * Reports a fakefly problem once per change.
+     *
+     * @param reason reason the pair cannot be used
+     */
+    private void blocked(String reason) {
+        if (reason.equals(this.fakeBlocked)) return;
+
+        this.fakeBlocked = reason;
+        this.warning("%s", reason);
+    }
+
+    /**
+     * Clears every fakefly transaction state.
+     */
+    private void cleanFakeFly() {
+        this.fakeHand = null;
+        this.fakePending = -1;
+        this.fakeAcked = -1L;
+        this.fakeSent = -1;
+        this.fakeSentAge = Long.MIN_VALUE / 2;
+        this.fakeServer = -1;
+        this.fakeDesync = false;
+        this.fakeArmed = false;
+        this.fakeWant = false;
+        this.fakeBlocked = null;
+        this.fakePair = true;
+        this.fakeLastGround = true;
+        this.fakePrevGround = true;
+        this.fakeStartAge = Long.MIN_VALUE / 2;
+    }
+
+    //endregion
+
     //region State management
 
     /**
@@ -578,7 +905,7 @@ public class BounceFly extends Module {
      */
     public boolean enabled() {
         return this.isActive() && this.mc.player != null
-            && !this.pass && Elytra.equipped();
+            && !this.pass && (Elytra.equipped() || this.glider());
     }
 
     /**
@@ -589,7 +916,7 @@ public class BounceFly extends Module {
     public boolean jumping() {
         // A stale launch flag used to survive a handover to Baritone, and the key mixin kept answering the
         // jump as pressed while the player was walking. The input is only ours while the module drives movement.
-        return this.launch && this.enabled();
+        return this.launch && this.enabled() && this.ready();
     }
 
     /**
@@ -659,7 +986,7 @@ public class BounceFly extends Module {
      * @return true when an elytra is equipped
      */
     private boolean equipped() {
-        if (Elytra.equipped()) {
+        if (Elytra.equipped() || this.glider()) {
             return true;
         }
 
@@ -676,6 +1003,17 @@ public class BounceFly extends Module {
      * @param velocity current player velocity
      */
     private void launch(Vec3d velocity) {
+        // With the chestplate worn the elytra sits in a hand until the burst swaps it in. Pressing
+        // while the pair is not ready sends a glide start with no glider on, so the inputs stay
+        // released until the module has the pair back.
+        if (!this.ready()) {
+            this.launch = false;
+            this.jump = 0;
+            this.force = false;
+            this.wasGliding = this.mc.player.isGliding();
+            return;
+        }
+
         boolean gliding = this.mc.player.isGliding();
 
         // The server can clear the glide on its own schedule, usually mid-hop and with nothing in
@@ -759,6 +1097,7 @@ public class BounceFly extends Module {
 
         this.flush();
         this.release();
+        this.fakeHand = null;
         this.reset();
 
         this.wasGliding = false;
@@ -1008,6 +1347,7 @@ public class BounceFly extends Module {
      */
     private void walk(BlockPos pos) {
         this.release();
+        this.fakeHand = null;
         this.reset();
         this.clear();
 
