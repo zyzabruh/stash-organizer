@@ -49,6 +49,10 @@ public class Shaders extends Module {
         Chams,
         /** Rim, halo and body together. */
         Full,
+        /** Wide bright rim, tight halo and a faint body, for a neon sign look. */
+        Neon,
+        /** No rim, soft halo and a see-through body, for a ghost look. */
+        Ghost,
         /** The individual switches below decide. */
         Custom
     }
@@ -246,6 +250,15 @@ public class Shaders extends Module {
         .build()
     );
 
+    private final Setting<Double> innerGlow = this.chain.add(new DoubleSetting.Builder()
+        .name("inner-glow")
+        .description("Brightens the body with the blurred silhouette, so the core of an entity glows too instead of staying flat.")
+        .defaultValue(0.35)
+        .range(0, 1)
+        .visible(() -> this.customChain.get() && this.usesFill())
+        .build()
+    );
+
     public Shaders() {
         super(StashOrganizerAddon.CATEGORY, "shaders", "Outlines players, mobs and storage entities through walls, with a glow, a rim and a fill.");
     }
@@ -266,6 +279,8 @@ public class Shaders extends Module {
      */
     public int chainGlowRadius() {
         return switch (this.mode.get()) {
+            case Neon -> 4;
+            case Ghost -> 2;
             case Glow, Full -> this.glowRadius.get();
             case Custom -> this.glow.get() ? this.glowRadius.get() : 0;
             default -> 0;
@@ -279,6 +294,8 @@ public class Shaders extends Module {
      */
     public float chainGlowIntensity() {
         return switch (this.mode.get()) {
+            case Neon -> 2.2F;
+            case Ghost -> 1.0F;
             case Glow, Full -> this.glowIntensity.get().floatValue();
             case Custom -> this.glow.get() ? this.glowIntensity.get().floatValue() : 0.0F;
             default -> 0.0F;
@@ -292,6 +309,8 @@ public class Shaders extends Module {
      */
     public float chainFillAlpha() {
         return switch (this.mode.get()) {
+            case Neon -> 0.15F;
+            case Ghost -> 0.25F;
             case Chams, Full -> this.fillAlpha.get().floatValue();
             case Custom -> this.fill.get() ? this.fillAlpha.get().floatValue() : 0.0F;
             default -> 0.0F;
@@ -305,8 +324,26 @@ public class Shaders extends Module {
      */
     public int chainOutlineWidth() {
         return switch (this.mode.get()) {
+            case Neon -> 2;
+            case Ghost -> 0;
             case Outline, Full, Custom -> this.outlineWidth.get();
             default -> 0;
+        };
+    }
+
+    /**
+     * Returns the inner glow to hand to the chain.
+     *
+     * @return how much the body is brightened by the blurred silhouette
+     */
+    public float chainInnerGlow() {
+        return switch (this.mode.get()) {
+            case Neon -> 0.6F;
+            case Ghost -> 0.2F;
+            // Chams and Full always fill, so the inner glow is theirs to use directly.
+            case Chams, Full -> this.innerGlow.get().floatValue();
+            case Custom -> this.fill.get() ? this.innerGlow.get().floatValue() : 0.0F;
+            default -> 0.0F;
         };
     }
 
@@ -353,7 +390,9 @@ public class Shaders extends Module {
     }
 
     private boolean usesRim() {
-        return this.mode.get() != Mode.Glow && this.mode.get() != Mode.Chams;
+        Mode current = this.mode.get();
+
+        return current == Mode.Outline || current == Mode.Full || current == Mode.Neon || current == Mode.Custom;
     }
 
     private boolean usesGlow() {
@@ -361,7 +400,7 @@ public class Shaders extends Module {
 
         if (current == Mode.Custom) return this.glow.get();
 
-        return current == Mode.Glow || current == Mode.Full;
+        return current == Mode.Glow || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost;
     }
 
     private boolean usesFill() {
@@ -369,7 +408,7 @@ public class Shaders extends Module {
 
         if (current == Mode.Custom) return this.fill.get();
 
-        return current == Mode.Chams || current == Mode.Full;
+        return current == Mode.Chams || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost;
     }
 
     /** Categories the module knows how to outline. */

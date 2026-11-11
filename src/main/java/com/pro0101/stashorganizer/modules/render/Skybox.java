@@ -1,12 +1,15 @@
 package com.pro0101.stashorganizer.modules.render;
 
 import com.pro0101.stashorganizer.StashOrganizerAddon;
+import com.pro0101.stashorganizer.render.SkyboxImage;
 import com.pro0101.stashorganizer.render.SkyboxRenderer;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
+import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 
@@ -22,7 +25,10 @@ public class Skybox extends Module {
     public enum Mode {
         Aurora,
         Nebula,
-        Sunset
+        Sunset,
+        Storm,
+        Twilight,
+        Image
     }
 
     private final SettingGroup general = this.settings.getDefaultGroup();
@@ -34,10 +40,27 @@ public class Skybox extends Module {
         .build()
     );
 
+    private final Setting<String> imageFile = this.general.add(new StringSetting.Builder()
+        .name("image-file")
+        .description("PNG inside config/stash-organizer/skybox/, drawn as an equirectangular panorama. A missing file falls back to Sunset.")
+        .defaultValue("sky.png")
+        .visible(() -> this.mode.get() == Mode.Image)
+        .build()
+    );
+
     private final Setting<SettingColor> tint = this.general.add(new ColorSetting.Builder()
         .name("tint")
         .description("Colour the shader output is multiplied by.")
         .defaultValue(new SettingColor(255, 255, 255, 255))
+        .build()
+    );
+
+    private final Setting<Double> animationSpeed = this.general.add(new DoubleSetting.Builder()
+        .name("animation-speed")
+        .description("Multiplier for every animated sky. Zero freezes the motion.")
+        .defaultValue(1.0)
+        .range(0.0, 3.0)
+        .visible(() -> this.mode.get() != Mode.Sunset)
         .build()
     );
 
@@ -87,6 +110,15 @@ public class Skybox extends Module {
     }
 
     /**
+     * Loads the panorama ahead of the first frame that needs it, so opening the mode does not stall
+     * the sky pass on a file read.
+     */
+    @Override
+    public void onActivate() {
+        if (this.mode.get() == Mode.Image) SkyboxImage.get(this.imageFile.get());
+    }
+
+    /**
      * Draws the sky for the current settings.
      */
     public void draw() {
@@ -94,7 +126,9 @@ public class Skybox extends Module {
 
         SkyboxRenderer.render(
             this.mode.get(),
-            color.r / 255.0F, color.g / 255.0F, color.b / 255.0F
+            color.r / 255.0F, color.g / 255.0F, color.b / 255.0F,
+            this.imageFile.get(),
+            this.animationSpeed.get().floatValue()
         );
     }
 

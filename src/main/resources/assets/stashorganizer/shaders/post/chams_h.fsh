@@ -20,6 +20,15 @@ in vec2 texCoord;
 out vec4 fragColor;
 
 void main() {
+    vec4 center = texture(InSampler, texCoord);
+
+    // Outline and Chams presets run without a halo; skipping the loop is the difference between one
+    // texture read and a whole kernel for every pixel of the screen.
+    if (glowRadius <= 0) {
+        fragColor = center;
+        return;
+    }
+
     vec2 texel = 1.0 / max(vec2(textureSize(InSampler, 0)), vec2(1.0));
 
     // A narrow kernel for a small radius keeps the halo close to the silhouette; widening the

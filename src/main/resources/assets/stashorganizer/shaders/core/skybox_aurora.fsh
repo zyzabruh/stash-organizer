@@ -24,14 +24,15 @@ float hash(vec2 p) {
 float noise(vec2 p) {
     vec2 cell = floor(p);
     vec2 frac = fract(p);
-    vec2 smooth = frac * frac * (3.0 - 2.0 * frac);
+    // "smooth" is a reserved GLSL qualifier and cannot name a variable.
+    vec2 ease = frac * frac * (3.0 - 2.0 * frac);
 
     float a = hash(cell);
     float b = hash(cell + vec2(1.0, 0.0));
     float c = hash(cell + vec2(0.0, 1.0));
     float d = hash(cell + vec2(1.0, 1.0));
 
-    return mix(mix(a, b, smooth.x), mix(c, d, smooth.x), smooth.y);
+    return mix(mix(a, b, ease.x), mix(c, d, ease.x), ease.y);
 }
 
 float bands(vec2 p) {
@@ -52,7 +53,7 @@ void main() {
     float height = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
 
     vec2 uv = vec2(dir.x, dir.z) / max(abs(dir.y) + 0.35, 0.01);
-    float drift = GameTime * 0.03;
+    float drift = GameTime * 0.03 * max(tint.a, 0.0);
     float ribbon = bands(uv * 1.4 + vec2(drift, drift * 0.5));
     ribbon = pow(clamp(ribbon * 1.6 - 0.35, 0.0, 1.0), 1.8);
 

@@ -58,6 +58,7 @@ public final class ChamsChain {
     private static float lastIntensity = Float.NaN;
     private static float lastFill = Float.NaN;
     private static float lastFillBrightness = Float.NaN;
+    private static float lastInnerGlow = Float.NaN;
     private static int lastWidth = -1;
     private static int lastHeight = -1;
     private static boolean loggedFailure;
@@ -74,20 +75,21 @@ public final class ChamsChain {
      * @param fillAlpha opacity of the solid fill
      * @param outlineWidth rim thickness in pixels
      * @param fillBrightness multiplier applied to the body colour
+     * @param innerGlow how much the body is brightened by the blurred silhouette
      * @return the chain, or null when it could not be built
      */
-    public static PostEffectProcessor get(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha, int outlineWidth, float fillBrightness) {
+    public static PostEffectProcessor get(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha, int outlineWidth, float fillBrightness, float innerGlow) {
         MinecraftClient client = MinecraftClient.getInstance();
         int width = client.getWindow().getFramebufferWidth();
         int height = client.getWindow().getFramebufferHeight();
 
         if (radius == lastRadius && intensity == lastIntensity && fillAlpha == lastFill
             && outlineWidth == lastOutlineWidth && fillBrightness == lastFillBrightness
-            && width == lastWidth && height == lastHeight) {
+            && innerGlow == lastInnerGlow && width == lastWidth && height == lastHeight) {
             return cached;
         }
 
-        PostEffectProcessor rebuilt = build(externalTargets, radius, intensity, fillAlpha, outlineWidth, fillBrightness);
+        PostEffectProcessor rebuilt = build(externalTargets, radius, intensity, fillAlpha, outlineWidth, fillBrightness, innerGlow);
 
         if (rebuilt == null) {
             // Remember the failing key so a broken shader is not recompiled on every frame; the
@@ -96,6 +98,7 @@ public final class ChamsChain {
             lastIntensity = intensity;
             lastFill = fillAlpha;
             lastFillBrightness = fillBrightness;
+            lastInnerGlow = innerGlow;
             lastOutlineWidth = outlineWidth;
             lastWidth = width;
             lastHeight = height;
@@ -110,6 +113,7 @@ public final class ChamsChain {
         lastIntensity = intensity;
         lastFill = fillAlpha;
         lastFillBrightness = fillBrightness;
+        lastInnerGlow = innerGlow;
         lastOutlineWidth = outlineWidth;
         lastWidth = width;
         lastHeight = height;
@@ -126,9 +130,10 @@ public final class ChamsChain {
      * @param fillAlpha opacity of the solid fill
      * @param outlineWidth rim thickness in pixels
      * @param fillBrightness multiplier applied to the body colour
+     * @param innerGlow how much the body is brightened by the blurred silhouette
      * @return the chain, or null when loading failed
      */
-    private static PostEffectProcessor build(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha, int outlineWidth, float fillBrightness) {
+    private static PostEffectProcessor build(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha, int outlineWidth, float fillBrightness, float innerGlow) {
         try {
             if (projection == null) {
                 projection = new ProjectionMatrix2("stash-organizer chams", 0.1F, 1000.0F, false);
@@ -153,7 +158,8 @@ public final class ChamsChain {
                     new UniformValue.IntValue(radius),
                     new UniformValue.FloatValue(intensity),
                     new UniformValue.FloatValue(fillAlpha),
-                    new UniformValue.FloatValue(fillBrightness)
+                    new UniformValue.FloatValue(fillBrightness),
+                    new UniformValue.FloatValue(innerGlow)
                 ))
             );
 
@@ -188,6 +194,7 @@ public final class ChamsChain {
         lastIntensity = Float.NaN;
         lastFill = Float.NaN;
         lastFillBrightness = Float.NaN;
+        lastInnerGlow = Float.NaN;
         lastWidth = -1;
         lastHeight = -1;
     }
