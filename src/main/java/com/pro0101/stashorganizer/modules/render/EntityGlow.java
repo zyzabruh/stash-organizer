@@ -3,6 +3,8 @@ package com.pro0101.stashorganizer.modules.render;
 import com.pro0101.stashorganizer.StashOrganizerAddon;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -34,6 +36,7 @@ import net.minecraft.entity.vehicle.MinecartEntity;
 public class EntityGlow extends Module {
     private final SettingGroup general = this.settings.getDefaultGroup();
     private final SettingGroup colors = this.settings.createGroup("Colors");
+    private final SettingGroup chain = this.settings.createGroup("Chain");
 
     private final Setting<Boolean> players = this.general.add(new BoolSetting.Builder()
         .name("players")
@@ -140,8 +143,94 @@ public class EntityGlow extends Module {
         .build()
     );
 
+    private final Setting<Boolean> customChain = this.chain.add(new BoolSetting.Builder()
+        .name("custom-chain")
+        .description("Replace the game's entity outline effect with the chams chain, which adds a glow and a solid fill.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> glow = this.chain.add(new BoolSetting.Builder()
+        .name("glow")
+        .description("Widen the outline into a halo.")
+        .defaultValue(true)
+        .visible(this.customChain::get)
+        .build()
+    );
+
+    private final Setting<Integer> glowRadius = this.chain.add(new IntSetting.Builder()
+        .name("glow-radius")
+        .description("Halo radius in pixels.")
+        .defaultValue(3)
+        .range(0, 16)
+        .visible(() -> this.customChain.get() && this.glow.get())
+        .build()
+    );
+
+    private final Setting<Double> glowIntensity = this.chain.add(new DoubleSetting.Builder()
+        .name("glow-intensity")
+        .description("How strongly the halo shows.")
+        .defaultValue(1.5)
+        .range(0, 3)
+        .visible(() -> this.customChain.get() && this.glow.get())
+        .build()
+    );
+
+    private final Setting<Boolean> fill = this.chain.add(new BoolSetting.Builder()
+        .name("fill")
+        .description("Fill the silhouette with a semi-transparent colour.")
+        .defaultValue(true)
+        .visible(this.customChain::get)
+        .build()
+    );
+
+    private final Setting<Double> fillAlpha = this.chain.add(new DoubleSetting.Builder()
+        .name("fill-alpha")
+        .description("Opacity of the filled silhouette.")
+        .defaultValue(0.4)
+        .range(0, 1)
+        .visible(() -> this.customChain.get() && this.fill.get())
+        .build()
+    );
+
     public EntityGlow() {
         super(StashOrganizerAddon.CATEGORY, "entity-glow", "Outlines players, mobs and storage entities through walls, with a colour per kind.");
+    }
+
+    /**
+     * Reports whether the chams chain should replace the vanilla outline effect.
+     *
+     * @return true when the chain is wanted
+     */
+    public boolean usesChain() {
+        return this.customChain.get();
+    }
+
+    /**
+     * Returns the glow radius to hand to the chain.
+     *
+     * @return radius in pixels, zero when the glow is off
+     */
+    public int chainGlowRadius() {
+        return this.glow.get() ? this.glowRadius.get() : 0;
+    }
+
+    /**
+     * Returns the glow intensity to hand to the chain.
+     *
+     * @return intensity, zero when the glow is off
+     */
+    public float chainGlowIntensity() {
+        return this.glow.get() ? this.glowIntensity.get().floatValue() : 0.0F;
+    }
+
+    /**
+     * Returns the fill opacity to hand to the chain.
+     *
+     * @return opacity, zero when the fill is off
+     */
+    public float chainFillAlpha() {
+        return this.fill.get() ? this.fillAlpha.get().floatValue() : 0.0F;
     }
 
     /**

@@ -2,7 +2,7 @@
   "required": true,
   "package": "com.pro0101.stashorganizer.mixins",
   "compatibilityLevel": "JAVA_21",
-  "client": ["AnvilScreenAccessor", "AnvilScreenHandlerAccessor", "CameraMixin", "ClientAccessor", "ClientPlayerMixin", "DataTrackerMixin", "EntityGlowMixin", "EntityMixin", "FireworkMixin", "FogRendererMixin", "OutlineColorMixin", "InteractionMixin", "KeyBindingMixin", "LivingEntityMixin", "MiningTweaksMixin", "EntityAccessor", "EntityVelocityUpdateS2CPacketAccessor", "FireworkRocketEntityAccessor", "InputAccessor", "InteractionAccessor", "PlayerInventoryAccessor", "SignEditScreenAccessor", "SkyRenderingMixin"],
+  "client": ["AnvilScreenAccessor", "AnvilScreenHandlerAccessor", "CameraMixin", "ClientAccessor", "ClientPlayerMixin", "DataTrackerMixin", "EntityGlowMixin", "EntityMixin", "EntityOutlineChainMixin", "FireworkMixin", "FogRendererMixin", "OutlineColorMixin", "InteractionMixin", "KeyBindingMixin", "LivingEntityMixin", "MiningTweaksMixin", "EntityAccessor", "EntityVelocityUpdateS2CPacketAccessor", "FireworkRocketEntityAccessor", "InputAccessor", "InteractionAccessor", "PlayerInventoryAccessor", "SignEditScreenAccessor", "SkyRenderingMixin"],
   "injectors": {
     "defaultRequire": 1
   }
