@@ -160,9 +160,9 @@ public class EntityGlow extends Module {
 
     private final Setting<Integer> glowRadius = this.chain.add(new IntSetting.Builder()
         .name("glow-radius")
-        .description("Halo radius in pixels.")
-        .defaultValue(3)
-        .range(0, 16)
+        .description("Halo radius in pixels. Every step costs another pair of texture reads per pixel, so keep it small.")
+        .defaultValue(2)
+        .range(0, 12)
         .visible(() -> this.customChain.get() && this.glow.get())
         .build()
     );

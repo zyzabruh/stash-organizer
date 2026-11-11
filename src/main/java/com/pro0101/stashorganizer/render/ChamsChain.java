@@ -20,29 +20,31 @@ import java.util.Set;
  * outline.
  *
  * <p>The chain replaces the game's own {@code entity_outline} effect rather than adding a second
- * pass on top of it: the silhouettes the game already renders are read, widened, coloured and
+ * pass on top of it: the silhouettes the game already renders are read, blurred, coloured and
  * written straight back into the outline target, which the game then draws as usual. That keeps one
- * source of truth for what is outlined, and it is why the glow follows the outline colours set on the
- * entities instead of a flat tint.
+ * source of truth for what is outlined, and it is why the glow follows the outline colours set on
+ * the entities instead of a flat tint.
  *
- * <p>Three passes, each one half of a two-axis dilation: {@code chams_h} widens the mask sideways,
- * {@code chams_c} carries the silhouette colour outwards with it, and {@code chams_v} finishes the
- * vertical half before compositing the glow and the fill back into the outline target.
+ * <p>Two passes, not three. {@code chams_h} blurs the silhouette sideways with a gaussian kernel and
+ * keeps the colour premultiplied; {@code chams_v} finishes the vertical half, subtracts the
+ * silhouette from the blurred alpha so the glow is a ring rather than a fill, and writes the result
+ * back into the outline target. A separate colour pass would have cost a full screen of texture
+ * reads for information the first pass can carry for free.
  *
- * <p>The chain is rebuilt only when one of its scalars changes, because the uniforms are baked into
- * the pipeline at load time. A failure to load leaves the previous chain in place, and if there never
- * was one the game falls back to its own effect.
+ * <p>The chain is rebuilt when one of its scalars changes, because the uniforms are baked into the
+ * pipeline at load time, and when the window size changes, because the internal targets are sized
+ * from the frame they were created in. A key that failed to build is remembered rather than retried,
+ * so a broken shader costs one warning instead of a recompile every frame; the game then falls back
+ * to its own effect, or keeps the last chain that worked.
  */
 public final class ChamsChain {
     private static final Logger LOG = LogUtils.getLogger();
 
     private static final Identifier SCREENQUAD = Identifier.of("minecraft", "core/screenquad");
     private static final Identifier H_FRAGMENT = Identifier.of("stashorganizer", "post/chams_h");
-    private static final Identifier C_FRAGMENT = Identifier.of("stashorganizer", "post/chams_c");
     private static final Identifier V_FRAGMENT = Identifier.of("stashorganizer", "post/chams_v");
 
     private static final Identifier MASK_TARGET = Identifier.of("stashorganizer", "chams_mask");
-    private static final Identifier COLOR_TARGET = Identifier.of("stashorganizer", "chams_color");
     private static final Identifier CHAIN_NAME = Identifier.of("stashorganizer", "chams");
 
     /** Target the game renders entity silhouettes into, and the one the chain writes back to. */
@@ -54,12 +56,15 @@ public final class ChamsChain {
     private static int lastRadius = Integer.MIN_VALUE;
     private static float lastIntensity = Float.NaN;
     private static float lastFill = Float.NaN;
+    private static int lastWidth = -1;
+    private static int lastHeight = -1;
+    private static boolean loggedFailure;
 
     private ChamsChain() {
     }
 
     /**
-     * Returns the chain for the requested scalars, rebuilding it when they changed.
+     * Returns the chain for the requested scalars, rebuilding it when they or the frame size changed.
      *
      * @param externalTargets targets the game provides to the effect
      * @param radius glow radius in pixels
@@ -68,18 +73,37 @@ public final class ChamsChain {
      * @return the chain, or null when it could not be built
      */
     public static PostEffectProcessor get(Set<Identifier> externalTargets, int radius, float intensity, float fillAlpha) {
-        if (cached != null && radius == lastRadius && intensity == lastIntensity && fillAlpha == lastFill) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        int width = client.getWindow().getFramebufferWidth();
+        int height = client.getWindow().getFramebufferHeight();
+
+        if (radius == lastRadius && intensity == lastIntensity && fillAlpha == lastFill
+            && width == lastWidth && height == lastHeight) {
             return cached;
         }
 
         PostEffectProcessor rebuilt = build(externalTargets, radius, intensity, fillAlpha);
-        if (rebuilt == null) return cached;
+
+        if (rebuilt == null) {
+            // Remember the failing key so a broken shader is not recompiled on every frame; the
+            // previous chain, if any, stays in use until a scalar or the window size changes.
+            lastRadius = radius;
+            lastIntensity = intensity;
+            lastFill = fillAlpha;
+            lastWidth = width;
+            lastHeight = height;
+
+            return cached;
+        }
 
         if (cached != null) cached.close();
         cached = rebuilt;
+        loggedFailure = false;
         lastRadius = radius;
         lastIntensity = intensity;
         lastFill = fillAlpha;
+        lastWidth = width;
+        lastHeight = height;
 
         return cached;
     }
@@ -106,41 +130,34 @@ public final class ChamsChain {
                 Map.of("DilateConfig", List.of(new UniformValue.IntValue(radius)))
             );
 
-            PostEffectPipeline.Pass color = new PostEffectPipeline.Pass(
-                SCREENQUAD, C_FRAGMENT,
-                List.of(new PostEffectPipeline.TargetSampler("In", OUTLINE_TARGET, false, false)),
-                COLOR_TARGET,
-                Map.of("ColorConfig", List.of(new UniformValue.IntValue(radius)))
-            );
-
             PostEffectPipeline.Pass composite = new PostEffectPipeline.Pass(
                 SCREENQUAD, V_FRAGMENT,
                 List.of(
                     new PostEffectPipeline.TargetSampler("In", MASK_TARGET, false, false),
-                    new PostEffectPipeline.TargetSampler("Color", COLOR_TARGET, false, false),
                     new PostEffectPipeline.TargetSampler("Orig", OUTLINE_TARGET, false, false)
                 ),
                 OUTLINE_TARGET,
                 Map.of("ChamsConfig", List.of(
+                    new UniformValue.IntValue(radius),
                     new UniformValue.FloatValue(intensity),
-                    new UniformValue.FloatValue(fillAlpha),
-                    new UniformValue.IntValue(radius)
+                    new UniformValue.FloatValue(fillAlpha)
                 ))
             );
 
             PostEffectPipeline pipeline = new PostEffectPipeline(
-                Map.of(
-                    MASK_TARGET, new PostEffectPipeline.Targets(Optional.empty(), Optional.empty(), false, 0),
-                    COLOR_TARGET, new PostEffectPipeline.Targets(Optional.empty(), Optional.empty(), false, 0)
-                ),
-                List.of(horizontal, color, composite)
+                Map.of(MASK_TARGET, new PostEffectPipeline.Targets(Optional.empty(), Optional.empty(), false, 0)),
+                List.of(horizontal, composite)
             );
 
             return PostEffectProcessor.parseEffect(
                 pipeline, MinecraftClient.getInstance().getTextureManager(), externalTargets, CHAIN_NAME, projection
             );
         } catch (ShaderLoader.LoadException | RuntimeException e) {
-            LOG.warn("Could not build the chams chain, keeping vanilla outlines", e);
+            if (!loggedFailure) {
+                LOG.warn("Could not build the chams chain, keeping vanilla outlines", e);
+                loggedFailure = true;
+            }
+
             return null;
         }
     }
@@ -152,8 +169,11 @@ public final class ChamsChain {
             cached = null;
         }
 
+        loggedFailure = false;
         lastRadius = Integer.MIN_VALUE;
         lastIntensity = Float.NaN;
         lastFill = Float.NaN;
+        lastWidth = -1;
+        lastHeight = -1;
     }
 }

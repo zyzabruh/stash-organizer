@@ -1,18 +1,24 @@
 #version 330
 
-// Composite pass of the chams chain: finishes the vertical half of the dilation, then writes the
-// result back into the entity outline target the game is about to draw. The glow comes from the
-// widened mask and the fill from the untouched silhouette, so an entity with the glow switched off
-// still keeps its solid fill.
+// Vertical half of the glow, then the composite written back into the entity outline target.
+//
+// The glow is the blurred alpha MINUS the silhouette: what is left is the ring outside the body.
+// Without that subtraction the blur covers the interior too, and switching the glow on fills the
+// character instead of drawing a halo around it. The fill is applied separately, from the untouched
+// silhouette, so the two effects can be tuned and switched independently.
 
 uniform sampler2D InSampler;
-uniform sampler2D ColorSampler;
 uniform sampler2D OrigSampler;
 
+layout(std140) uniform SamplerInfo {
+    vec2 OutSize;
+    vec2 InSize;
+};
+
 layout(std140) uniform ChamsConfig {
+    int glowRadius;
     float glowIntensity;
     float fillAlpha;
-    int glowRadius;
 };
 
 in vec2 texCoord;
@@ -20,26 +26,33 @@ in vec2 texCoord;
 out vec4 fragColor;
 
 void main() {
-    vec2 texel = 1.0 / vec2(textureSize(InSampler, 0));
-    float glow = 0.0;
-    vec3 color = vec3(0.0);
+    vec2 texel = 1.0 / max(InSize, vec2(1.0));
+
+    float radius = max(float(glowRadius), 1.0);
+    float falloff = 0.5 / (radius * radius * 0.35);
+
+    vec3 colorSum = vec3(0.0);
+    float alphaSum = 0.0;
+    float weightSum = 0.0;
 
     for (int i = -glowRadius; i <= glowRadius; i++) {
-        vec2 offset = vec2(0.0, float(i) * texel.y);
-        float sample_alpha = texture(InSampler, texCoord + offset).a;
+        float distance = float(i);
+        float weight = exp(-distance * distance * falloff);
+        vec4 sampleColor = texture(InSampler, texCoord + vec2(0.0, distance * texel.y));
 
-        if (sample_alpha > glow) {
-            glow = sample_alpha;
-            color = texture(ColorSampler, texCoord + offset).rgb;
-        }
+        colorSum += sampleColor.rgb * sampleColor.a * weight;
+        alphaSum += sampleColor.a * weight;
+        weightSum += weight;
     }
+
+    float blurred = weightSum > 0.0 ? alphaSum / weightSum : 0.0;
+    vec3 blurredColor = alphaSum > 0.0001 ? colorSum / alphaSum : vec3(0.0);
 
     vec4 original = texture(OrigSampler, texCoord);
 
-    // The silhouette itself keeps its own colour at full strength; the widened ring fades with the
-    // configured intensity so a large radius still reads as a halo instead of a flat blob.
-    vec3 outColor = original.a > 0.0 ? original.rgb : color;
-    float outAlpha = max(original.a * fillAlpha, glow * glowIntensity);
+    float ring = max(blurred - original.a, 0.0);
+    float outAlpha = clamp(ring * glowIntensity + original.a * fillAlpha, 0.0, 1.0);
+    vec3 outColor = original.a > 0.001 ? original.rgb : blurredColor;
 
-    fragColor = vec4(outColor, clamp(outAlpha, 0.0, 1.0));
+    fragColor = vec4(outColor, outAlpha);
 }
