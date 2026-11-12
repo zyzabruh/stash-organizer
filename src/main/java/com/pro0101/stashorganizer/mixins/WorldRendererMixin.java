@@ -1,6 +1,7 @@
 package com.pro0101.stashorganizer.mixins;
 
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.pro0101.stashorganizer.modules.render.Shaders;
 import com.pro0101.stashorganizer.modules.render.Skybox;
 import com.pro0101.stashorganizer.render.SkyboxRenderer;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -14,6 +15,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -54,5 +56,26 @@ public abstract class WorldRendererMixin {
         this.framebufferSet.mainFramebuffer = pass.transfer(this.framebufferSet.mainFramebuffer);
 
         pass.setRenderer(module::draw);
+    }
+
+    /**
+     * Lets the local player be rendered while the camera is in first person.
+     *
+     * <p>The entity pass skips the camera's own entity unless the camera is third person, which is
+     * what keeps your model out of your view. Reporting it as third person for that one check draws
+     * the model without moving the camera, so the shader has something to draw on.
+     *
+     * @param camera camera of the frame
+     * @return whether the camera counts as detached for the entity pass
+     */
+    @Redirect(method = "fillEntityRenderStates", require = 0, at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/client/render/Camera;isThirdPerson()Z"
+    ))
+    private boolean stashorganizer$selfInFirstPerson(Camera camera) {
+        Shaders module = Modules.get().get(Shaders.class);
+
+        if (module != null && module.isActive() && module.selfInFirstPerson()) return true;
+
+        return camera.isThirdPerson();
     }
 }

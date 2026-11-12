@@ -75,6 +75,14 @@ public class Shaders extends Module {
         .build()
     );
 
+    private final Setting<Boolean> selfFirstPerson = this.general.add(new BoolSetting.Builder()
+        .name("self-first-person")
+        .description("Also draw your own model in first person, so the shader shows on you without switching perspective. The camera sits inside the head, so the effect is mostly visible on the body.")
+        .defaultValue(false)
+        .visible(this.self::get)
+        .build()
+    );
+
     private final Setting<Boolean> monsters = this.general.add(new BoolSetting.Builder()
         .name("monsters")
         .description("Outline hostile mobs.")
@@ -372,6 +380,15 @@ public class Shaders extends Module {
      */
     public float chainFillBrightness() {
         return this.fillBrightness.get().floatValue();
+    }
+
+    /**
+     * Reports whether your own model is drawn in first person.
+     *
+     * @return true when the local player is rendered without switching to third person
+     */
+    public boolean selfInFirstPerson() {
+        return this.self.get() && this.selfFirstPerson.get();
     }
 
     /**
