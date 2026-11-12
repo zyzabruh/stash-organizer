@@ -32,7 +32,6 @@ public final class Flight {
 
     private Flight() {}
 
-    //region State management
 
     /**
      * Returns the shared flight controller.
@@ -130,9 +129,7 @@ public final class Flight {
         return this.spoof() && (this.active || this.prepared());
     }
 
-    //endregion
 
-    //region Flight control
 
     /**
      * Converts an existing elytra glide into spoofing.
@@ -299,9 +296,7 @@ public final class Flight {
         this.dry = 0;
     }
 
-    //endregion
 
-    //region Requests and synchronization
 
     /**
      * Runs an action now or remembers it for later.
@@ -345,9 +340,7 @@ public final class Flight {
         return (byte) (flags | (1 << gliding));
     }
 
-    //endregion
 
-    //region Armor equipment
 
     /**
      * Equips a chestplate before spoofing begins.
@@ -419,9 +412,7 @@ public final class Flight {
         return true;
     }
 
-    //endregion
 
-    //region Packet ordering
 
     /**
      * Runs a pending action while the elytra is equipped.
@@ -467,9 +458,7 @@ public final class Flight {
         Packets.sync(Packets.state(pressed, false));
     }
 
-    //endregion
 
-    //region Validation and cleanup
 
     /**
      * Checks whether flight conditions still allow gliding.
@@ -510,5 +499,4 @@ public final class Flight {
         this.request = null;
     }
 
-    //endregion
 }

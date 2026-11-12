@@ -80,7 +80,6 @@ public final class Search {
         return this.route(network.start, network.end, previous, highway, normal);
     }
 
-    //region Graph preparation
 
     /**
      * Adds time-optimal entry and exit points to the highway graph.
@@ -246,9 +245,7 @@ public final class Search {
         this.add(links, new Link(end, start, road, type, distance));
     }
 
-    //endregion
 
-    //region Route reconstruction
 
     /**
      * Reconstructs the selected route from Dijkstra predecessors.
@@ -323,9 +320,7 @@ public final class Search {
         return second.add(first.negate()).length();
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Represents a directional connection used during route calculation.
@@ -361,5 +356,4 @@ public final class Search {
      */
     private record State(Graph.Node node, float cost) {}
 
-    //endregion
 }

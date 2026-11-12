@@ -154,7 +154,6 @@ public class AutoPilot extends Module {
         this.reset();
     }
 
-    //region Event handlers
 
     /**
      * Advances travel along the saved route.
@@ -212,9 +211,7 @@ public class AutoPilot extends Module {
         this.toggle();
     }
 
-    //endregion
 
-    //region State management
 
     /**
      * Clears the saved route and runtime state.
@@ -318,9 +315,7 @@ public class AutoPilot extends Module {
         }
     }
 
-    //endregion
 
-    //region Route management
 
     /**
      * Captures the current route and destination from Navigation.
@@ -451,9 +446,7 @@ public class AutoPilot extends Module {
         );
     }
 
-    //endregion
 
-    //region Initial launch
 
     /**
      * Selects the closest route leg and resumes travel.
@@ -576,9 +569,7 @@ public class AutoPilot extends Module {
         this.state = State.Flight;
     }
 
-    //endregion
 
-    //region Standard travel
 
     /**
      * Follows standard route legs with Baritone Elytra.
@@ -690,9 +681,7 @@ public class AutoPilot extends Module {
         return true;
     }
 
-    //endregion
 
-    //region Highway entry
 
     /**
      * Uses the highway directly when it is already within reach.
@@ -811,9 +800,7 @@ public class AutoPilot extends Module {
         this.mc.player.startGliding();
     }
 
-    //endregion
 
-    //region Highway travel
 
     /**
      * Starts Bounce Fly toward the end of a highway leg.
@@ -951,9 +938,7 @@ public class AutoPilot extends Module {
             && this.timer > 0 && --this.timer > 0;
     }
 
-    //endregion
 
-    //region Highway exit
 
     /**
      * Moves to the selected exit block before starting the drop.
@@ -1023,9 +1008,7 @@ public class AutoPilot extends Module {
         }
     }
 
-    //endregion
 
-    //region Clear space search
 
     /**
      * Finds the nearest clear space below the player.
@@ -1250,9 +1233,7 @@ public class AutoPilot extends Module {
         return true;
     }
 
-    //endregion
 
-    //region Block control
 
     /**
      * Collects minable blocks in a selected vertical column.
@@ -1408,9 +1389,7 @@ public class AutoPilot extends Module {
         return air != null && slot >= 0 && air.place(pos, slot);
     }
 
-    //endregion
 
-    //region Baritone control
 
     /**
      * Starts Baritone elytra pathing toward a destination.
@@ -1497,9 +1476,7 @@ public class AutoPilot extends Module {
             && !current.equals(this.goal);
     }
 
-    //endregion
 
-    //region Movement control
 
     /**
      * Moves toward the center of a block.
@@ -1587,9 +1564,7 @@ public class AutoPilot extends Module {
         this.mc.options.sneakKey.setPressed(false);
     }
 
-    //endregion
 
-    //region Utilities and validation
 
     /**
      * Returns the Navigation module.
@@ -1682,5 +1657,4 @@ public class AutoPilot extends Module {
         return Client.ready() && Client.nether();
     }
 
-    //endregion
 }

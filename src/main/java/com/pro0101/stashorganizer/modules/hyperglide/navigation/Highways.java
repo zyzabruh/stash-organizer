@@ -61,7 +61,6 @@ public final class Highways {
         return cut(roads, radius);
     }
 
-    //region Highway generation
 
     /**
      * Builds the known nether highway network.
@@ -332,9 +331,7 @@ public final class Highways {
         return false;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Represents a highway composed of one or more segments.
@@ -349,5 +346,4 @@ public final class Highways {
         }
     }
 
-    //endregion
 }

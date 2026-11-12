@@ -47,7 +47,6 @@ public final class Baritone {
         config.elytraPredictTerrain.value = predict;
     }
 
-    //region Main interface
 
     /**
      * Checks whether Baritone elytra flight is ready.
@@ -247,9 +246,7 @@ public final class Baritone {
         return BaritoneAPI.getProvider().getPrimaryBaritone();
     }
 
-    //endregion
 
-    //region Baritone assistance
 
     /**
      * Helps Baritone step onto blocks it needs to place.
@@ -357,5 +354,4 @@ public final class Baritone {
         return target == source + 1;
     }
 
-    //endregion
 }

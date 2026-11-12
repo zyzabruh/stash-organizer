@@ -412,7 +412,6 @@ public class BounceFly extends Module {
         this.flush();
     }
 
-    //region Event handlers
 
     /**
      * Controls normal bounce movement and obstacle handling.
@@ -554,9 +553,7 @@ public class BounceFly extends Module {
         if (GliderSwap.isSwapSound(event.sound.getId())) event.cancel();
     }
 
-    //endregion
 
-    //region Network emulation
 
     /**
      * Releases a held glide clear on the first tick the re-deploy is free.
@@ -643,9 +640,7 @@ public class BounceFly extends Module {
         }
     }
 
-    //endregion
 
-    //region Chestplate fakefly
 
     /**
      * Runs the chestplate fakefly one tick at a time.
@@ -894,9 +889,7 @@ public class BounceFly extends Module {
         this.fakeStartAge = Long.MIN_VALUE / 2;
     }
 
-    //endregion
 
-    //region State management
 
     /**
      * Checks whether bounce input should be forced.
@@ -967,9 +960,7 @@ public class BounceFly extends Module {
         }
     }
 
-    //endregion
 
-    //region Bounce control
 
     /**
      * Checks whether bounce movement is available.
@@ -1150,9 +1141,7 @@ public class BounceFly extends Module {
         return dx * dx + dy * dy + dz * dz > rollbackDistance;
     }
 
-    //endregion
 
-    //region Travel control
 
     /**
      * Manages active obstacle passing and mining.
@@ -1303,9 +1292,7 @@ public class BounceFly extends Module {
         return true;
     }
 
-    //endregion
 
-    //region Obstacle pathing
 
     /**
      * Starts recovery toward a safe highway position.
@@ -1408,9 +1395,7 @@ public class BounceFly extends Module {
         }
     }
 
-    //endregion
 
-    //region Obstacle scanning
 
     /**
      * Keeps a Baritone goal inside terrain the client already has.
@@ -1585,9 +1570,7 @@ public class BounceFly extends Module {
         }
     }
 
-    //endregion
 
-    //region Collision detection
 
     /**
      * Finds the closest obstacle along the highway direction.
@@ -1651,9 +1634,7 @@ public class BounceFly extends Module {
         ));
     }
 
-    //endregion
 
-    //region Direction control
 
     /**
      * Stores the highway direction from the player's yaw.
@@ -1825,9 +1806,7 @@ public class BounceFly extends Module {
         return this.block(bx / 2.0, bz / 2.0);
     }
 
-    //endregion
 
-    //region Height correction
 
     /**
      * Finds the most likely highway level being followed.
@@ -1858,9 +1837,7 @@ public class BounceFly extends Module {
         return score;
     }
 
-    //endregion
 
-    //region Utilities and validation
 
     /**
      * Creates a block position on the highway level.
@@ -1929,5 +1906,4 @@ public class BounceFly extends Module {
         return (int) Math.round(value / grid) * grid;
     }
 
-    //endregion
 }

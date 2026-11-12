@@ -89,7 +89,6 @@ public class FastPortal extends Module {
         this.sync = 0;
     }
 
-    //region Event handlers
 
     /**
      * Advances portal construction and places required blocks.
@@ -144,9 +143,7 @@ public class FastPortal extends Module {
         }
     }
 
-    //endregion
 
-    //region Portal structure
 
     /**
      * Calculates the portal frame positions in front of the player.
@@ -225,9 +222,7 @@ public class FastPortal extends Module {
         return this.mc.world.getBlockState(pos).isOf(Blocks.OBSIDIAN);
     }
 
-    //endregion
 
-    //region Portal interaction
 
     /**
      * Places the next required obsidian block.
@@ -296,5 +291,4 @@ public class FastPortal extends Module {
         this.toggle();
     }
 
-    //endregion
 }

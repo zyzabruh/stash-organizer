@@ -73,7 +73,6 @@ public class EasyAccess extends Module {
         this.own = false;
     }
 
-    //region Event handlers
 
     /**
      * Finds and opens a hidden container.
@@ -105,9 +104,7 @@ public class EasyAccess extends Module {
         }
     }
 
-    //endregion
 
-    //region Target selection
 
     /**
      * Checks whether the crosshair target is an accessible container.
@@ -225,9 +222,7 @@ public class EasyAccess extends Module {
         return best;
     }
 
-    //endregion
 
-    //region Container interaction
 
     /**
      * Opens the closest hidden container.
@@ -327,9 +322,7 @@ public class EasyAccess extends Module {
             || state.createScreenHandlerFactory(this.mc.world, pos) != null;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Stores a hidden container target and its squared distance.
@@ -342,5 +335,4 @@ public class EasyAccess extends Module {
         BlockHitResult block, EntityHitResult entity, double distance
     ) {}
 
-    //endregion
 }

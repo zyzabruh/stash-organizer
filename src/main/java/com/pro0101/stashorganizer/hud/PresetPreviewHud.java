@@ -33,6 +33,7 @@ public class PresetPreviewHud extends HudElement {
         PresetPreviewHud::new
     );
 
+    private static final String TITLE_TEXT = "Presets";
     private static final Color BACKGROUND = new Color(0, 0, 0, 120);
     private static final Color TITLE = Color.WHITE;
     private static final Color HEADER = new Color(220, 220, 220);
@@ -156,8 +157,6 @@ public class PresetPreviewHud extends HudElement {
     private static String stateOf(Module module) {
         return module != null && module.isActive() ? "" : "  (off)";
     }
-
-    private static final String TITLE_TEXT = "Presets";
 
     /**
      * One rendered row.

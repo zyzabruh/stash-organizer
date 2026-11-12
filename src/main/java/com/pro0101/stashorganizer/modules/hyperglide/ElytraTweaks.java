@@ -250,7 +250,6 @@ public class ElytraTweaks extends Module {
         this.reset();
     }
 
-    //region Event handlers
 
     /**
      * Handles flight, equipment and takeoff each tick.
@@ -321,9 +320,7 @@ public class ElytraTweaks extends Module {
         }
     }
 
-    //endregion
 
-    //region Core management
 
     /**
      * Keeps spoof mode synchronized while flying.
@@ -377,9 +374,7 @@ public class ElytraTweaks extends Module {
         this.recover();
     }
 
-    //endregion
 
-    //region State management
 
     /**
      * Reads the automatic elytra deployment setting, so a module that forces it on can put the
@@ -538,9 +533,7 @@ public class ElytraTweaks extends Module {
         this.rocket = null;
     }
 
-    //endregion
 
-    //region Spoof transition
 
     /**
      * Turns spoof mode on or off.
@@ -589,9 +582,7 @@ public class ElytraTweaks extends Module {
         }
     }
 
-    //endregion
 
-    //region Equipment control
 
     /**
      * Detects a double jump and equips an elytra from the hotbar.
@@ -698,9 +689,7 @@ public class ElytraTweaks extends Module {
         return elytra ? Elytra.hotbar() : Hotbar.find(Elytra::chestplate);
     }
 
-    //endregion
 
-    //region Durability replacement
 
     /**
      * Equips the most damaged elytra for repair.
@@ -857,9 +846,7 @@ public class ElytraTweaks extends Module {
         this.finish();
     }
 
-    //endregion
 
-    //region Takeoff control
 
     /**
      * Handles the takeoff toggle key.
@@ -1017,9 +1004,7 @@ public class ElytraTweaks extends Module {
         }
     }
 
-    //endregion
 
-    //region Boost management
 
     /**
      * Tracks the firework currently boosting the player.
@@ -1063,9 +1048,7 @@ public class ElytraTweaks extends Module {
         return Elytra.firework();
     }
 
-    //endregion
 
-    //region Baritone recovery
 
     /**
      * Starts or restores Baritone elytra flight.
@@ -1149,9 +1132,7 @@ public class ElytraTweaks extends Module {
             && Baritone.elytra() && !this.bounce();
     }
 
-    //endregion
 
-    //region Collision detection
 
     /**
      * Predicts whether a collision would cause damage.
@@ -1277,9 +1258,7 @@ public class ElytraTweaks extends Module {
         return Math.max(0.0, (old - speed) * 10.0 - 3.0);
     }
 
-    //endregion
 
-    //region Collision recovery
 
     /**
      * Waits until elytra flight can safely continue.
@@ -1406,5 +1385,4 @@ public class ElytraTweaks extends Module {
             && this.avoid.get() && !this.normal();
     }
 
-    //endregion
 }

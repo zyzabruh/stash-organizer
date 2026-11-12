@@ -145,7 +145,6 @@ public class ControlFly extends Module {
         this.reset();
     }
 
-    //region Event handlers
 
     /**
      * Updates boost, takeoff and active flight control.
@@ -222,9 +221,7 @@ public class ControlFly extends Module {
         this.duration(stack);
     }
 
-    //endregion
 
-    //region State management
 
     /**
      * Checks whether automatic takeoff is active.
@@ -286,9 +283,7 @@ public class ControlFly extends Module {
         this.turn.active = false;
     }
 
-    //endregion
 
-    //region Flight control
 
     /**
      * Processes movement, steering, pitch control and rocket use.
@@ -434,9 +429,7 @@ public class ControlFly extends Module {
         }
     }
 
-    //endregion
 
-    //region Boost management
 
     /**
      * Tracks the firework currently boosting the player.
@@ -526,9 +519,7 @@ public class ControlFly extends Module {
             && !this.boost.pending && this.stocked();
     }
 
-    //endregion
 
-    //region Takeoff and steering
 
     /**
      * Calculates movement input relative to the camera direction.
@@ -670,9 +661,7 @@ public class ControlFly extends Module {
         ), -90.0F, 90.0F);
     }
 
-    //endregion
 
-    //region Altitude control
 
     /**
      * Selects manual pitch control or automatic altitude leveling.
@@ -775,9 +764,7 @@ public class ControlFly extends Module {
         return score;
     }
 
-    //endregion
 
-    //region Rotation control
 
     /**
      * Synchronizes the rotation and launches a rocket when requested.
@@ -820,9 +807,7 @@ public class ControlFly extends Module {
         this.turn.active = true;
     }
 
-    //endregion
 
-    //region Flight physics
 
     /**
      * Calculates the maximum allowed speed for a flight direction.
@@ -882,9 +867,7 @@ public class ControlFly extends Module {
         return rotation * 0.1 + (rotation * 1.5 - velocity) * 0.5;
     }
 
-    //endregion
 
-    //region Rocket handling
 
     /**
      * Checks whether another rocket should be launched.
@@ -978,9 +961,7 @@ public class ControlFly extends Module {
         this.boost.pending = false;
     }
 
-    //endregion
 
-    //region Camera control
 
     /**
      * Activates and initializes the independent camera rotation.
@@ -1074,9 +1055,7 @@ public class ControlFly extends Module {
         this.view.active = false;
     }
 
-    //endregion
 
-    //region Utilities and validation
 
     /**
      * Checks whether Elytra Tweaks currently stops movement.
@@ -1113,9 +1092,7 @@ public class ControlFly extends Module {
         return slot >= 0 ? Hotbar.stack(slot) : ItemStack.EMPTY;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Stores a candidate leveling pitch and its prediction score.
@@ -1173,5 +1150,4 @@ public class ControlFly extends Module {
         private FireworkRocketEntity rocket;
     }
 
-    //endregion
 }

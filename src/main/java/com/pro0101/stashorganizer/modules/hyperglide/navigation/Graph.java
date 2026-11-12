@@ -47,7 +47,6 @@ public final class Graph {
         return this.edges;
     }
 
-    //region Graph construction
 
     /**
      * Converts roads into mutable graph parts.
@@ -188,9 +187,7 @@ public final class Graph {
         return node;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Represents a graph node at a fixed X/Z position.
@@ -237,5 +234,4 @@ public final class Graph {
         }
     }
 
-    //endregion
 }

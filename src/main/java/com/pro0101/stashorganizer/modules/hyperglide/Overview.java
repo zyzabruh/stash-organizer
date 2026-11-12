@@ -113,7 +113,6 @@ public class Overview extends Module {
         }
     }
 
-    //region Content analysis
 
     /**
      * Returns the dominant content icon for a container stack.
@@ -191,9 +190,7 @@ public class Overview extends Module {
         return best == null ? ItemStack.EMPTY : best.stack;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Tracks occurrences and total count of an item.
@@ -233,5 +230,4 @@ public class Overview extends Module {
         }
     }
 
-    //endregion
 }

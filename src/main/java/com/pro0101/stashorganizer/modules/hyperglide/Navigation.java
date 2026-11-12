@@ -273,7 +273,6 @@ public class Navigation extends Module {
         this.restart = 0;
     }
 
-    //region Event handlers
 
     /**
      * Recalculates the route at a fixed tick interval.
@@ -404,9 +403,7 @@ public class Navigation extends Module {
         this.frame(context, left, top);
     }
 
-    //endregion
 
-    //region Public API
 
     /**
      * Recalculates the route immediately.
@@ -433,9 +430,7 @@ public class Navigation extends Module {
         return this.point;
     }
 
-    //endregion
 
-    //region Map display
 
     /**
      * Calculates the map view around the selected position.
@@ -530,9 +525,7 @@ public class Navigation extends Module {
         );
     }
 
-    //endregion
 
-    //region Map rendering
 
     /**
      * Draws every highway segment within the current map view.
@@ -761,9 +754,7 @@ public class Navigation extends Module {
         };
     }
 
-    //endregion
 
-    //region Info rendering
 
     /**
      * Renders information for the hovered map position.
@@ -936,9 +927,7 @@ public class Navigation extends Module {
         return value + remaining + "s";
     }
 
-    //endregion
 
-    //region Map interaction
 
     /**
      * Moves the window or pans the map while dragging.
@@ -1079,9 +1068,7 @@ public class Navigation extends Module {
             && my >= top && my <= top + size;
     }
 
-    //endregion
 
-    //region Destination control
 
     /**
      * Applies a destination change and delays Auto Pilot restart.
@@ -1210,9 +1197,7 @@ public class Navigation extends Module {
         return faster ? accelerated : highway;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Renders destination input with optional coordinate censorship.
@@ -1247,5 +1232,4 @@ public class Navigation extends Module {
      */
     private record View(Vec2f center, double scale) {}
 
-    //endregion
 }

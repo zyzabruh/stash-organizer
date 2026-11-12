@@ -165,7 +165,7 @@ public final class SkyboxRenderer {
         try {
             return RenderLayer.of(
                 "stashorganizer_skybox_" + name,
-                RenderSetup.builder(pipeline(name, false)).build()
+                RenderSetup.builder(pipelineBuilder(name).build()).build()
             );
         } catch (RuntimeException exception) {
             StashOrganizerAddon.LOG.error("Skybox mode " + name + " failed to build", exception);
@@ -183,7 +183,9 @@ public final class SkyboxRenderer {
         try {
             return RenderLayer.of(
                 "stashorganizer_skybox_image",
-                RenderSetup.builder(pipeline("image", true)).texture("Sampler0", texture).build()
+                RenderSetup.builder(pipelineBuilder("image").withSampler("Sampler0").build())
+                    .texture("Sampler0", texture)
+                    .build()
             );
         } catch (RuntimeException exception) {
             StashOrganizerAddon.LOG.error("Skybox image mode failed to build", exception);
@@ -195,11 +197,10 @@ public final class SkyboxRenderer {
      * Builds the pipeline shared by every mode.
      *
      * @param name shader and pipeline suffix
-     * @param sampler whether the fragment shader samples a bound texture
-     * @return the pipeline
+     * @return a builder the caller finishes, so the image mode can declare its sampler
      */
-    private static RenderPipeline pipeline(String name, boolean sampler) {
-        RenderPipeline.Builder builder = RenderPipeline.builder()
+    private static RenderPipeline.Builder pipelineBuilder(String name) {
+        return RenderPipeline.builder()
             .withLocation(Identifier.of("stashorganizer", "pipeline/skybox_" + name))
             .withVertexShader(Identifier.of("stashorganizer", "core/skybox"))
             .withFragmentShader(Identifier.of("stashorganizer", "core/skybox_" + name))
@@ -210,9 +211,5 @@ public final class SkyboxRenderer {
             .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
             .withDepthWrite(false)
             .withCull(false);
-
-        if (sampler) builder.withSampler("Sampler0");
-
-        return builder.build();
     }
 }

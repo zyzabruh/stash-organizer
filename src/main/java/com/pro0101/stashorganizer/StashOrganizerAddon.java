@@ -23,7 +23,6 @@ import com.pro0101.stashorganizer.modules.huntbuddy.sorter.ShulkerSorter;
 import com.pro0101.stashorganizer.modules.hyperglide.AirPlace;
 import com.pro0101.stashorganizer.modules.hyperglide.AutoPilot;
 import com.pro0101.stashorganizer.modules.hyperglide.BounceFly;
-import com.pro0101.stashorganizer.modules.hyperglide.BoostBounds;
 import com.pro0101.stashorganizer.modules.hyperglide.RocketCycle;
 import com.pro0101.stashorganizer.modules.hyperglide.ControlFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ElytraTweaks;
@@ -69,7 +68,6 @@ public class StashOrganizerAddon extends MeteorAddon {
         Modules.get().add(new BounceFly());
         Modules.get().add(new ControlFly());
         Modules.get().add(new ElytraTweaks());
-        Modules.get().add(new BoostBounds());
         Modules.get().add(new RocketCycle());
         Modules.get().add(new MiningTweaks());
         Modules.get().add(new ShulkerSorter());

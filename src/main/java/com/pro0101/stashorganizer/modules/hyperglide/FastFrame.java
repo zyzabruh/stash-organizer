@@ -77,7 +77,6 @@ public class FastFrame extends Module {
         this.reset();
     }
 
-    //region Event handlers
 
     /**
      * Tracks whether either hand holds an item frame.
@@ -121,9 +120,7 @@ public class FastFrame extends Module {
         }
     }
 
-    //endregion
 
-    //region Frame handling
 
     /**
      * Tracks a valid item frame placement.
@@ -290,9 +287,7 @@ public class FastFrame extends Module {
         return new EntityHitResult(frame, point);
     }
 
-    //endregion
 
-    //region Utilities and validation
 
     /**
      * Finds the usable item inside the configured hotbar range.
@@ -330,9 +325,7 @@ public class FastFrame extends Module {
         return hand == Hand.MAIN_HAND ? this.main : this.off;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Stores a pending item frame placement.
@@ -359,5 +352,4 @@ public class FastFrame extends Module {
         }
     }
 
-    //endregion
 }

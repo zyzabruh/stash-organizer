@@ -203,7 +203,6 @@ public class MiningTweaks extends Module {
         this.reset();
     }
 
-    //region Event handlers
 
     /**
      * Updates queues, retries, remine state and active mining targets.
@@ -263,9 +262,7 @@ public class MiningTweaks extends Module {
         }
     }
 
-    //endregion
 
-    //region State management
 
     /**
      * Checks whether instant remine is enabled.
@@ -315,9 +312,7 @@ public class MiningTweaks extends Module {
         this.fast = false;
     }
 
-    //endregion
 
-    //region Mining requests
 
     /**
      * Rebreaks a known block before the world update arrives.
@@ -413,9 +408,7 @@ public class MiningTweaks extends Module {
         target.updated = now;
     }
 
-    //endregion
 
-    //region Queue management
 
     /**
      * Moves ready retry requests back into the active queue.
@@ -532,9 +525,7 @@ public class MiningTweaks extends Module {
         this.primary = null;
     }
 
-    //endregion
 
-    //region Mining control
 
     /**
      * Rebreaks the last confirmed block after replacement.
@@ -714,9 +705,7 @@ public class MiningTweaks extends Module {
         target.burst = true;
     }
 
-    //endregion
 
-    //region Target lifecycle
 
     /**
      * Marks a target finished and sends its stop action when required.
@@ -812,9 +801,7 @@ public class MiningTweaks extends Module {
         }
     }
 
-    //endregion
 
-    //region Progress calculation
 
     /**
      * Calculates normalized mining progress for a target.
@@ -914,9 +901,7 @@ public class MiningTweaks extends Module {
         Render.box(event, box, side, line, this.shape.get());
     }
 
-    //endregion
 
-    //region Tool and packet handling
 
     /**
      * Refreshes target data and sends a mining action packet.
@@ -1028,9 +1013,7 @@ public class MiningTweaks extends Module {
         return new BlockPos(pos.getX(), height, pos.getZ());
     }
 
-    //endregion
 
-    //region Block targeting
 
     /**
      * Finds the nearest visible face of a block.
@@ -1122,9 +1105,7 @@ public class MiningTweaks extends Module {
         );
     }
 
-    //endregion
 
-    //region Target validation
 
     /**
      * Checks whether a block is within a given mining reach.
@@ -1204,9 +1185,7 @@ public class MiningTweaks extends Module {
         return false;
     }
 
-    //endregion
 
-    //region Data structures
 
     /**
      * Represents an evaluated hotbar tool.
@@ -1278,5 +1257,4 @@ public class MiningTweaks extends Module {
         }
     }
 
-    //endregion
 }

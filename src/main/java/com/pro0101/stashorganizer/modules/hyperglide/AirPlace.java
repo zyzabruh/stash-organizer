@@ -82,7 +82,6 @@ public class AirPlace extends Module {
         this.wait = 0;
     }
 
-    //region Event handlers
 
     /**
      * Updates the air-place target and handles a new right click.
@@ -114,9 +113,7 @@ public class AirPlace extends Module {
         }
     }
 
-    //endregion
 
-    //region Target control
 
     /**
      * Updates the current air-place target.
@@ -174,9 +171,7 @@ public class AirPlace extends Module {
             Placement.open(this.hit.getBlockPos());
     }
 
-    //endregion
 
-    //region Block placement
 
     /**
      * Places the selected item at the current target.
@@ -259,9 +254,7 @@ public class AirPlace extends Module {
         return this.pending.containsKey(pos);
     }
 
-    //endregion
 
-    //region Utilities and validation
 
     /**
      * Checks whether an item can be placed using Air Place.
@@ -274,5 +267,4 @@ public class AirPlace extends Module {
             || stack.getItem() instanceof SpawnEggItem;
     }
 
-    //endregion
 }
