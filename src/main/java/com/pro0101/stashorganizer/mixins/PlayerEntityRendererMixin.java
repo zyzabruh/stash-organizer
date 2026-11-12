@@ -45,6 +45,10 @@ public abstract class PlayerEntityRendererMixin {
 
         state.displayName = null;
         state.spyglassState.clear();
+        state.headItemRenderState.clear();
+        state.wearingSkullType = null;
+        state.wearingSkullProfile = null;
+        state.headItemAnimationProgress = 0.0F;
         state.equippedChestStack = ItemStack.EMPTY;
         state.equippedLegsStack = ItemStack.EMPTY;
         state.equippedFeetStack = ItemStack.EMPTY;
