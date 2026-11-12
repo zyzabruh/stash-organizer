@@ -57,6 +57,24 @@ public abstract class SkyRenderingMixin {
     }
 
     /**
+     * Replaces the End sky box with the shader sky.
+     *
+     * <p>The End has its own sky rather than a gradient, drawn inside the same pass, so the shader
+     * is drawn in its place instead of in front of it.
+     *
+     * @param info injection callback
+     */
+    @Inject(method = "renderEndSky", at = @At("HEAD"), cancellable = true)
+    private void stashorganizer$endSky(CallbackInfo info) {
+        Skybox module = Modules.get().get(Skybox.class);
+
+        if (module == null || !module.isActive() || !SkyboxRenderer.available()) return;
+
+        module.draw();
+        info.cancel();
+    }
+
+    /**
      * Hides the sun, moon and stars while the shader sky is drawn.
      *
      * @param matrices pose stack

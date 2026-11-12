@@ -66,7 +66,7 @@ public class Skybox extends Module {
 
     private final Setting<Boolean> darkSky = this.general.add(new BoolSetting.Builder()
         .name("replace-dark-sky")
-        .description("Also draws the shader over the dark sky the Nether and the End paint after the top sky, which would otherwise cover it.")
+        .description("Hides the dark disc vanilla paints below the horizon, so the shader covers the whole sky instead of stopping at it.")
         .defaultValue(true)
         .build()
     );

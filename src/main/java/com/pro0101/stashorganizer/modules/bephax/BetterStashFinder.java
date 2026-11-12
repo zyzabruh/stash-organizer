@@ -241,7 +241,8 @@ public class BetterStashFinder extends Module
         .description("A chunk holding this many of any of these blocks is recorded.")
         .defaultValue(
             Blocks.DIAMOND_BLOCK, Blocks.NETHERITE_BLOCK, Blocks.EMERALD_BLOCK, Blocks.GOLD_BLOCK,
-            Blocks.IRON_BLOCK, Blocks.LAPIS_BLOCK, Blocks.REDSTONE_BLOCK, Blocks.QUARTZ_BLOCK
+            Blocks.IRON_BLOCK, Blocks.LAPIS_BLOCK, Blocks.REDSTONE_BLOCK, Blocks.QUARTZ_BLOCK,
+            Blocks.BEACON, Blocks.RESPAWN_ANCHOR, Blocks.LODESTONE, Blocks.CONDUIT
         )
         .visible(() -> findBlocks.get() && secondList.get())
         .build()
@@ -259,8 +260,8 @@ public class BetterStashFinder extends Module
 
     private final Setting<Boolean> thirdList = sgBlocks.add(new BoolSetting.Builder()
         .name("list-3")
-        .description("Counts the blocks of the third, custom list.")
-        .defaultValue(false)
+        .description("Counts the blocks of the third list, the furniture a stash leaves behind once its containers are emptied.")
+        .defaultValue(true)
         .visible(findBlocks::get)
         .build()
     );
@@ -268,7 +269,11 @@ public class BetterStashFinder extends Module
     private final Setting<List<Block>> thirdBlocks = sgBlocks.add(new BlockListSetting.Builder()
         .name("blocks-3")
         .description("A chunk holding this many of any of these blocks is recorded.")
-        .defaultValue(List.of())
+        .defaultValue(
+            Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL,
+            Blocks.BREWING_STAND, Blocks.JUKEBOX, Blocks.NOTE_BLOCK, Blocks.CHISELED_BOOKSHELF,
+            Blocks.IRON_TRAPDOOR, Blocks.TRAPPED_CHEST, Blocks.REDSTONE_TORCH, Blocks.SOUL_TORCH
+        )
         .visible(() -> findBlocks.get() && thirdList.get())
         .build()
     );
@@ -276,7 +281,7 @@ public class BetterStashFinder extends Module
     private final Setting<Integer> thirdCount = sgBlocks.add(new IntSetting.Builder()
         .name("count-3")
         .description("How many blocks of the third list a chunk needs to be recorded.")
-        .defaultValue(2)
+        .defaultValue(5)
         .min(1)
         .sliderRange(1, 100)
         .visible(() -> findBlocks.get() && thirdList.get())
