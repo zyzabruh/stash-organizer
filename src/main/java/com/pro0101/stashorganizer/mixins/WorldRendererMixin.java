@@ -28,8 +28,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(WorldRenderer.class)
 public abstract class WorldRendererMixin {
+    /** Set as soon as the self hook runs once, so a missing one can be reported instead of doing nothing. */
+    private static volatile boolean selfHookApplied;
+
     @Shadow
     private DefaultFramebufferSet framebufferSet;
+
+    /**
+     * Reports whether the first-person self hook has run at least once this session.
+     *
+     * @return true when the redirect found its call site
+     */
+    public static boolean selfHookApplied() {
+        return selfHookApplied;
+    }
 
     /**
      * Adds the sky pass the Nether would otherwise skip.
@@ -72,6 +84,8 @@ public abstract class WorldRendererMixin {
         target = "Lnet/minecraft/client/render/Camera;isThirdPerson()Z"
     ))
     private boolean stashorganizer$selfInFirstPerson(Camera camera) {
+        selfHookApplied = true;
+
         Shaders module = Modules.get().get(Shaders.class);
 
         if (module != null && module.isActive() && module.selfInFirstPerson()) return true;

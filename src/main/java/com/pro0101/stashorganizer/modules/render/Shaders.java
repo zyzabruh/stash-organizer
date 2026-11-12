@@ -1,6 +1,9 @@
 package com.pro0101.stashorganizer.modules.render;
 
 import com.pro0101.stashorganizer.StashOrganizerAddon;
+import com.pro0101.stashorganizer.mixins.WorldRendererMixin;
+import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -267,6 +270,9 @@ public class Shaders extends Module {
         .build()
     );
 
+    private int missingHookTicks;
+    private boolean warnedMissingHook;
+
     public Shaders() {
         super(StashOrganizerAddon.CATEGORY, "shaders", "Outlines players, mobs and storage entities through walls, with a glow, a rim and a fill.");
     }
@@ -380,6 +386,50 @@ public class Shaders extends Module {
      */
     public float chainFillBrightness() {
         return this.fillBrightness.get().floatValue();
+    }
+
+    /**
+     * Reports a missing render hook instead of letting the option do nothing.
+     *
+     * <p>The hook only runs when the entity pass reaches the call it replaces. Waiting a moment
+     * keeps the world load frame, where the pass has not run yet, from reporting a false alarm.
+     *
+     * @param event post-tick event
+     */
+    @EventHandler
+    private void onTick(TickEvent.Post event) {
+        if (!this.isActive() || !this.selfInFirstPerson()) {
+            this.missingHookTicks = 0;
+            this.warnedMissingHook = false;
+            return;
+        }
+
+        MinecraftClient client = MinecraftClient.getInstance();
+
+        if (client.player == null || !client.options.getPerspective().isFirstPerson()) {
+            this.missingHookTicks = 0;
+            return;
+        }
+
+        if (WorldRendererMixin.selfHookApplied()) {
+            this.missingHookTicks = 0;
+            this.warnedMissingHook = false;
+            return;
+        }
+
+        if (++this.missingHookTicks < 60) return;
+
+        this.missingHookTicks = 0;
+
+        if (this.warnedMissingHook) return;
+
+        this.warnedMissingHook = true;
+
+        String message = "self-first-person is on, but the entity render hook was not found: "
+            + "the self model cannot be drawn in first person on this Minecraft version.";
+
+        StashOrganizerAddon.LOG.warn(message);
+        this.warning(message);
     }
 
     /**
