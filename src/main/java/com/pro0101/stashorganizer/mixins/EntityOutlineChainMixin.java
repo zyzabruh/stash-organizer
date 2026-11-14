@@ -43,7 +43,7 @@ public abstract class EntityOutlineChainMixin {
 
         if (module != null && module.isActive() && module.usesChain() && ChamsChain.OUTLINE_TARGET.equals(id)) {
             PostEffectProcessor chain = ChamsChain.get(
-                targets, module.chainGlowRadius(), module.chainGlowIntensity(),
+                targets, module.chainStyle(), module.chainGlowRadius(), module.chainGlowIntensity(),
                 module.chainFillAlpha(), module.chainOutlineWidth(), module.chainFillBrightness(),
                 module.chainInnerGlow()
             );

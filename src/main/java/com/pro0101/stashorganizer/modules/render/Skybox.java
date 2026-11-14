@@ -28,6 +28,9 @@ public class Skybox extends Module {
         Sunset,
         Storm,
         Twilight,
+        Galaxy,
+        Ocean,
+        Ember,
         Image
     }
 

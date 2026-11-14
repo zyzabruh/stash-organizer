@@ -18,6 +18,7 @@ import com.pro0101.stashorganizer.modules.huntbuddy.Pitch40;
 import com.pro0101.stashorganizer.modules.huntbuddy.RocketBoost;
 import com.pro0101.stashorganizer.modules.huntbuddy.RocketFly;
 import com.pro0101.stashorganizer.modules.huntbuddy.SignHistory;
+import com.pro0101.stashorganizer.util.BaritoneCompat;
 import com.pro0101.stashorganizer.util.XaeroCompat;
 import com.pro0101.stashorganizer.modules.huntbuddy.sorter.ShulkerSorter;
 import com.pro0101.stashorganizer.modules.hyperglide.AirPlace;
@@ -27,6 +28,20 @@ import com.pro0101.stashorganizer.modules.hyperglide.RocketCycle;
 import com.pro0101.stashorganizer.modules.hyperglide.ControlFly;
 import com.pro0101.stashorganizer.modules.hyperglide.ElytraTweaks;
 import com.pro0101.stashorganizer.modules.hyperglide.EasyAccess;
+import com.pro0101.stashorganizer.modules.render.BlockShader;
+import com.pro0101.stashorganizer.modules.visual.Ambience;
+import com.pro0101.stashorganizer.modules.visual.Animations;
+import com.pro0101.stashorganizer.modules.visual.HitEffect;
+import com.pro0101.stashorganizer.modules.visual.ItemESP;
+import com.pro0101.stashorganizer.modules.visual.JumpCircles;
+import com.pro0101.stashorganizer.modules.visual.NameTags;
+import com.pro0101.stashorganizer.modules.visual.RenderOptimizer;
+import com.pro0101.stashorganizer.modules.visual.StorageESP;
+import com.pro0101.stashorganizer.modules.visual.TotemAnimation;
+import com.pro0101.stashorganizer.modules.visual.Trails;
+import com.pro0101.stashorganizer.modules.visual.TwoDESP;
+import com.pro0101.stashorganizer.modules.visual.Weather;
+import com.pro0101.stashorganizer.modules.visual.WorldParticles;
 import com.pro0101.stashorganizer.modules.render.Shaders;
 import com.pro0101.stashorganizer.modules.render.Skybox;
 import com.pro0101.stashorganizer.modules.hyperglide.FastPortal;
@@ -38,6 +53,7 @@ import com.pro0101.stashorganizer.modules.stashorganizer.StashOrganizer;
 import com.pro0101.stashorganizer.modules.stashorganizer.StashSessionStore;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
+import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.meteorclient.systems.hud.Hud;
@@ -50,11 +66,16 @@ import org.slf4j.Logger;
 public class StashOrganizerAddon extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
     public static final Category CATEGORY = new Category("Stash");
+    public static final Category VISUALS = new Category("Visuals");
     public static final HudGroup HUD_GROUP = new HudGroup("Stash");
 
     @Override
     public void onInitialize() {
         LOG.info("Initializing Stash Organizer");
+
+        // Baritone assist: AutoPilot's climbing steps go through Baritone, which needs the player
+        // lined up on every step. Skip it cleanly when Baritone is not installed.
+        if (BaritoneCompat.isAvailable()) BaritoneCompat.register();
 
         // Modules
         Modules.get().add(new StashOrganizer());
@@ -76,6 +97,20 @@ public class StashOrganizerAddon extends MeteorAddon {
         Modules.get().add(new InventoryCleaner());
         Modules.get().add(new Skybox());
         Modules.get().add(new Shaders());
+        Modules.get().add(new BlockShader());
+        Modules.get().add(new StorageESP());
+        Modules.get().add(new ItemESP());
+        Modules.get().add(new NameTags());
+        Modules.get().add(new Trails());
+        Modules.get().add(new JumpCircles());
+        Modules.get().add(new TwoDESP());
+        Modules.get().add(new HitEffect());
+        Modules.get().add(new Weather());
+        Modules.get().add(new WorldParticles());
+        Modules.get().add(new Ambience());
+        Modules.get().add(new RenderOptimizer());
+        Modules.get().add(new Animations());
+        Modules.get().add(new TotemAnimation());
         Modules.get().add(new RocketFly());
         Modules.get().add(new Pitch40());
         Modules.get().add(new ElytraRecast());
@@ -118,9 +153,26 @@ public class StashOrganizerAddon extends MeteorAddon {
         if (StashSessionStore.canResume()) module.toggle();
     }
 
+    /**
+     * Hides the pause and resume messages the Baritone assist prints while it lines the player up.
+     * Baritone prefixes them with its tag unless the tag is turned off, so both forms are caught,
+     * but ordinary chat that merely mentions the words is left alone.
+     */
+    @EventHandler
+    private void onReceiveMessage(ReceiveMessageEvent event) {
+        String text = event.getMessage().getString().trim();
+        if (text.equals("Paused") || text.equals("Resumed")) {
+            event.cancel();
+        } else if (text.startsWith("[Baritone]") &&
+                   (text.contains("Paused") || text.contains("Resumed"))) {
+            event.cancel();
+        }
+    }
+
     @Override
     public void onRegisterCategories() {
         Modules.registerCategory(CATEGORY);
+        Modules.registerCategory(VISUALS);
     }
 
     @Override

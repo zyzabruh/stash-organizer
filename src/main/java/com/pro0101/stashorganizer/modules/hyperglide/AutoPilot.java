@@ -11,6 +11,7 @@ import com.pro0101.stashorganizer.modules.hyperglide.utilities.Flight;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Hotbar;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Placement;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Player;
+import com.pro0101.stashorganizer.util.BaritoneCompat;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -111,6 +112,12 @@ public class AutoPilot extends Module {
      */
     @Override
     public void onActivate() {
+        if (!BaritoneCompat.isAvailable()) {
+            this.error("Baritone is required for Auto Pilot.");
+            this.toggle();
+            return;
+        }
+
         if (this.netherrack() < 0) {
             this.error("No netherrack in hotbar.");
             this.toggle();

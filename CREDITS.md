@@ -48,7 +48,7 @@ code) is original work.
 - `TrailFollower`'s `Pitch40` flight mode drives the imported `Pitch40` module, which in turn uses `ElytraRecast` and
   `RocketBoost`; all three are registered, so the mode works instead of finding no module to toggle. `HuntFeed` lost its
   companion-pet bridge, which would have pulled the whole pet package in.
-- `BounceFly` keeps its Hyperglide origin. Its glide-clear recovery, `pause-after-setback`, `stop-near-entities`,
+- `BounceFly` keeps its Hyperglide origin. Its glide-clear recovery, `stop-near-entities`,
   the loaded-chunk guard on the Baritone goal, and the opt-in `hold-glide-clear` / `fake-lag` network emulation are
   ported from HunterBuddy's `ElytraBounce` and `BounceHazards` (`4cae4b1`, GPL-3.0). The clear hold itself is this
   addon's `GlideClearHold`, shared with `Pitch40`. Pitch solving from that module is not imported; its chestplate

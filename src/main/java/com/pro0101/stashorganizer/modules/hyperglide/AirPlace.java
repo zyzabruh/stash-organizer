@@ -59,7 +59,7 @@ public class AirPlace extends Module {
     private int wait;
 
     public AirPlace() {
-        super(StashOrganizerAddon.CATEGORY, "air-place",
+        super(StashOrganizerAddon.CATEGORY, "air-place-plus",
             "Places blocks in the air using vanilla timing."
         );
     }

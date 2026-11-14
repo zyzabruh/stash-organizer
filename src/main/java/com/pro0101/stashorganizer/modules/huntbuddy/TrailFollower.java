@@ -687,7 +687,15 @@ public class TrailFollower extends Module {
         }
 
         // A walking goal competes for the same inputs, so it is dropped before the flight is set.
-        baritone.getCustomGoalProcess().setGoal(null);
+        // Baritone forwards every setGoal to the active elytra process, and null is neither a GoalXZ
+        // nor a GoalBlock, so dropping it that way while flying logs a failed goal update on every
+        // retarget. Clear the custom process directly once the elytra owns the goal.
+        if (baritone.getElytraProcess().isActive()) {
+            baritone.getCustomGoalProcess().onLostControl();
+        } else {
+            baritone.getCustomGoalProcess().setGoal(null);
+        }
+
         BaritoneAPI.getSettings().elytraTermsAccepted.value = true;
         baritone.getElytraProcess().pathTo(new GoalXZ(x, z));
 

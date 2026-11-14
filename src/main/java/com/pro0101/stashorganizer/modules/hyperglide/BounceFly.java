@@ -23,7 +23,6 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityPosition;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
@@ -36,7 +35,6 @@ import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
-import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -65,15 +63,12 @@ public class BounceFly extends Module {
     private static final int low = 119;
     private static final int high = 120;
     private static final int delay = 3;
-    private static final int wait = 20;
 
     private static final int[] dxs = {0, -1, -1, -1, 0, 1, 1, 1};
     private static final int[] dzs = {1, 1, 0, -1, -1, -1, 0, 1};
 
     private static final double hazardWidth = 4.0;
     private static final double hazardHeight = 6.0;
-
-    private static final double rollbackDistance = 0.25;
 
     private static final Set<EntityType<?>> hazards = Set.of(
         EntityType.TNT, EntityType.END_CRYSTAL, EntityType.WARDEN,
@@ -145,6 +140,16 @@ public class BounceFly extends Module {
         .build()
     );
 
+    private final Setting<Integer> stuckTicks = this.general.add(new IntSetting.Builder()
+        .name("stuck-ticks")
+        .description("Ticks of slow flight before the bounce hands over to Baritone. Lower values switch faster; the walk itself keeps the counter stopped, so a request cannot repeat until the previous pass ends.")
+        .defaultValue(10)
+        .min(5)
+        .sliderRange(5, 40)
+        .visible(this.passer::get)
+        .build()
+    );
+
     private final Setting<Integer> passTimeout = this.general.add(new IntSetting.Builder()
         .name("pass-timeout")
         .description("Ticks to keep bouncing paused after asking Baritone for a path. Baritone reports nothing while it calculates, and treating that silence as finished is what resumed the bounce on top of the walk.")
@@ -152,15 +157,6 @@ public class BounceFly extends Module {
         .min(20)
         .sliderRange(20, 200)
         .visible(() -> this.passer.get())
-        .build()
-    );
-
-    private final Setting<Integer> setbackPause = this.general.add(new IntSetting.Builder()
-        .name("pause-after-setback")
-        .description("Ticks bouncing stays off once the server moves you back. The inputs are released and the client-side glide is dropped either way; pressing the same thing again on the tick a setback lands is what turns one rubber band into two.")
-        .defaultValue(1)
-        .min(0)
-        .sliderMax(40)
         .build()
     );
 
@@ -202,23 +198,6 @@ public class BounceFly extends Module {
         .min(2)
         .sliderMax(20)
         .visible(this.holdClear::get)
-        .build()
-    );
-
-    private final Setting<Boolean> walkBack = this.general.add(new BoolSetting.Builder()
-        .name("setback-walk")
-        .description("Walks a few blocks with Baritone after the server rolls you back, then bounces again from there. Bouncing from the spot the server just rejected asks for the same correction twice. Needs obstacle-passer, which owns the Baritone pass.")
-        .defaultValue(true)
-        .build()
-    );
-
-    private final Setting<Integer> walkDistance = this.general.add(new IntSetting.Builder()
-        .name("setback-distance")
-        .description("How many blocks the setback walk covers before bouncing resumes.")
-        .defaultValue(3)
-        .min(1)
-        .sliderRange(1, 16)
-        .visible(this.walkBack::get)
         .build()
     );
 
@@ -286,6 +265,7 @@ public class BounceFly extends Module {
     private int level = low;
 
     private boolean pass;
+    private boolean passStarted;
     private int passWait;
     private boolean launch;
     private boolean enabled;
@@ -293,7 +273,6 @@ public class BounceFly extends Module {
 
     private boolean wasGliding;
     private boolean force;
-    private int pause;
 
     private final Queue<Packet<?>> queue = new ConcurrentLinkedQueue<>();
     private boolean flushing;
@@ -301,8 +280,6 @@ public class BounceFly extends Module {
     private double groundY;
     private int pressAge;
     private boolean held;
-
-    private int rollbacks;
 
     private Hand fakeHand;
     private int fakePending = -1;
@@ -359,25 +336,13 @@ public class BounceFly extends Module {
 
         this.wasGliding = false;
         this.force = false;
-        this.pause = 0;
 
         this.pressAge = 0;
         this.held = false;
         this.lagTicks = 0;
-        this.rollbacks = 0;
         this.groundY = this.mc.player.getY();
 
         this.cleanFakeFly();
-    }
-
-    /**
-     * Reports how many times the server has rolled the player back since activation.
-     *
-     * @return rollback count, or null when there has been none
-     */
-    @Override
-    public String getInfoString() {
-        return this.rollbacks == 0 ? null : "rollbacks: " + this.rollbacks;
     }
 
     /**
@@ -401,7 +366,6 @@ public class BounceFly extends Module {
 
         this.wasGliding = false;
         this.force = false;
-        this.pause = 0;
 
         this.pressAge = 0;
         this.held = false;
@@ -429,16 +393,6 @@ public class BounceFly extends Module {
         this.serviceFakeFly();
 
         if (!this.available()) return;
-
-        // A setback is the server rejecting the last movement. Pressing the same inputs again on
-        // the tick it lands is what turns one rubber band into two, so they stay released until
-        // the client has been put back where the server put it.
-        if (this.pause > 0) {
-            this.pause--;
-            this.release();
-            this.reset();
-            return;
-        }
 
         if (this.hazard()) return;
 
@@ -468,10 +422,12 @@ public class BounceFly extends Module {
     }
 
     /**
-     * Notes a server correction so the bounce can answer it on the next tick.
+     * Handles the packets that affect a running bounce.
      *
-     * <p>Meteor fires the receive event on the netty thread, so nothing is touched here: the
-     * state change is handed to the main thread.
+     * <p>A position correction only drops a held glide-clear and clears the stuck counter. The
+     * bounce itself is left alone, so the next tick presses its inputs again the way Hyperglide
+     * does instead of releasing them or dropping the glide. Meteor fires the receive event on the
+     * netty thread, so the counter is changed on the main thread.
      *
      * @param event packet receive event
      */
@@ -481,12 +437,12 @@ public class BounceFly extends Module {
 
         this.intakeFakeFly(event);
 
-        if (event.packet instanceof PlayerPositionLookS2CPacket packet) {
-            if (!this.rollback(packet)) return;
-
+        if (event.packet instanceof PlayerPositionLookS2CPacket) {
             GlideClearHold.release(this);
-            this.mc.execute(this::setback);
-            return;
+
+            // A correction is not a stuck bounce: give the recovery its full window instead of
+            // handing a teleported player straight to Baritone, which cannot path unloaded chunks.
+            this.mc.execute(() -> this.slow = 0);
         }
 
         // A ping that arrives behind a held clear has to be answered from here: the clear is only
@@ -652,7 +608,7 @@ public class BounceFly extends Module {
      * resumes on its own once the pair is back.
      */
     private void serviceFakeFly() {
-        if (!this.fakeFly.get() || !this.enabled() || this.pause > 0) {
+        if (!this.fakeFly.get() || !this.enabled()) {
             this.fakeHand = null;
             this.fakePair = true;
             return;
@@ -938,6 +894,7 @@ public class BounceFly extends Module {
         this.blocks.clear();
         this.goal = null;
         this.focus = null;
+        this.passStarted = false;
         this.passWait = 0;
     }
 
@@ -1076,71 +1033,6 @@ public class BounceFly extends Module {
         }
     }
 
-    /**
-     * Drops the bounce state after the server moved the player back.
-     *
-     * <p>The client is left holding a glide the server no longer agrees with, so it is dropped
-     * here and the inputs stay released for {@code pause-after-setback} ticks. The first takeoff
-     * after the pause starts the sequence over rather than resuming a stale one.
-     */
-    private void setback() {
-        if (!Client.ready()) return;
-
-        this.flush();
-        this.release();
-        this.fakeHand = null;
-        this.reset();
-
-        this.wasGliding = false;
-        this.started = false;
-        this.pause = this.setbackPause.get();
-        this.rollbacks++;
-
-        this.mc.player.stopGliding();
-
-        if (!this.walkBack.get() || !this.passer.get()) return;
-
-        // The bounce would otherwise restart from the exact spot the server just disagreed with,
-        // which asks for the same correction again. A short walk moves the client off that spot
-        // and gets both sides agreeing before the next hop is taken.
-        this.level = this.level();
-
-        BlockPos goal = this.base().add(
-            this.dx * this.walkDistance.get(), 0, this.dz * this.walkDistance.get()
-        );
-
-        this.pause = 0;
-        this.walk(this.safe(goal));
-    }
-
-    /**
-     * Checks whether a position packet actually moved the player.
-     *
-     * <p>The server sends the same packet for plain resyncs, which agree with where the client
-     * already is and are not rollbacks. Axes flagged relative carry a delta rather than a
-     * destination, so they are read as one.
-     *
-     * @param packet position packet
-     * @return true when the packet moved the player
-     */
-    private boolean rollback(PlayerPositionLookS2CPacket packet) {
-        if (this.mc.player == null) return true;
-
-        EntityPosition change = packet.change();
-        Set<PositionFlag> relatives = packet.relatives();
-        Vec3d target = change.position();
-        Vec3d current = this.mc.player.getEntityPos();
-
-        double dx = relatives.contains(PositionFlag.X)
-            ? target.x : target.x - current.x;
-        double dy = relatives.contains(PositionFlag.Y)
-            ? target.y : target.y - current.y;
-        double dz = relatives.contains(PositionFlag.Z)
-            ? target.z : target.z - current.z;
-
-        return dx * dx + dy * dy + dz * dz > rollbackDistance;
-    }
-
 
 
     /**
@@ -1167,6 +1059,7 @@ public class BounceFly extends Module {
         }
 
         if (this.pass && Baritone.pathing()) {
+            this.passStarted = true;
             this.release();
             this.reset();
             this.passWait = 0;
@@ -1174,9 +1067,11 @@ public class BounceFly extends Module {
         }
 
         // Baritone computes its path off the main thread: for a moment after walk() it reports neither a
-        // custom goal nor pathing, which is not the same as having finished. Keep the movement released for
-        // that window, otherwise the bounce resumes underneath the walk.
-        if (this.pass && this.passWait++ < this.passTimeout.get()) {
+        // custom goal nor pathing, which is not the same as having finished. Only that opening window is
+        // covered by the timeout. Once Baritone has actually walked, the first tick it stops is the end of
+        // the pass, and waiting out the whole timeout again is what made the handover back to the bounce
+        // take five seconds.
+        if (this.pass && !this.passStarted && this.passWait++ < this.passTimeout.get()) {
             this.release();
             this.reset();
             return true;
@@ -1234,7 +1129,7 @@ public class BounceFly extends Module {
             return;
         }
 
-        if (++this.slow >= wait) {
+        if (++this.slow >= this.stuckTicks.get()) {
             this.slow = 0;
             this.path();
         }
@@ -1339,6 +1234,7 @@ public class BounceFly extends Module {
         this.clear();
 
         this.pass = true;
+        this.passStarted = false;
         this.passWait = 0;
         this.started = false;
         this.wasGliding = false;
@@ -1357,6 +1253,7 @@ public class BounceFly extends Module {
         this.setup();
 
         this.pass = true;
+        this.passStarted = false;
         this.passWait = 0;
         this.goal = goal;
         this.focus = null;

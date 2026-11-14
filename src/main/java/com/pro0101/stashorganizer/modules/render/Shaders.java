@@ -1,9 +1,8 @@
 package com.pro0101.stashorganizer.modules.render;
 
 import com.pro0101.stashorganizer.StashOrganizerAddon;
-import com.pro0101.stashorganizer.mixins.WorldRendererMixin;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.orbit.EventHandler;
+import com.pro0101.stashorganizer.render.ChamsChain;
+import com.pro0101.stashorganizer.render.Colours;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -56,6 +55,8 @@ public class Shaders extends Module {
         Neon,
         /** No rim, soft halo and a see-through body, for a ghost look. */
         Ghost,
+        /** Wide halo around a bright core and an almost clear body, for an aura around the model. */
+        Aura,
         /** The individual switches below decide. */
         Custom
     }
@@ -75,14 +76,6 @@ public class Shaders extends Module {
         .name("self")
         .description("Outline yourself, seen in third person.")
         .defaultValue(false)
-        .build()
-    );
-
-    private final Setting<Boolean> selfFirstPerson = this.general.add(new BoolSetting.Builder()
-        .name("self-first-person")
-        .description("Also draw your own model in first person, so the shader shows on you without switching perspective. The camera sits inside the head, so the effect is mostly visible on the body.")
-        .defaultValue(false)
-        .visible(this.self::get)
         .build()
     );
 
@@ -185,10 +178,25 @@ public class Shaders extends Module {
         .build()
     );
 
+    private final Setting<Boolean> rainbow = this.colors.add(new BoolSetting.Builder()
+        .name("rainbow")
+        .description("Cycle every outline through the hue wheel, offset per entity; the per-kind colours then only set the opacity.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<Boolean> customChain = this.chain.add(new BoolSetting.Builder()
         .name("custom-chain")
         .description("Replace the game's entity outline effect with the chams chain, which adds a glow and a solid fill.")
         .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<ChamsChain.Style> shader = this.chain.add(new EnumSetting.Builder<ChamsChain.Style>()
+        .name("shader")
+        .description("Which post shader draws the effect: the soft two-pass glow, an exact-pixel edge, a radial aura, or a rainbow gradient computed on screen.")
+        .defaultValue(ChamsChain.Style.Soft)
+        .visible(this.customChain::get)
         .build()
     );
 
@@ -270,9 +278,6 @@ public class Shaders extends Module {
         .build()
     );
 
-    private int missingHookTicks;
-    private boolean warnedMissingHook;
-
     public Shaders() {
         super(StashOrganizerAddon.CATEGORY, "shaders", "Outlines players, mobs and storage entities through walls, with a glow, a rim and a fill.");
     }
@@ -296,6 +301,15 @@ public class Shaders extends Module {
     }
 
     /**
+     * Returns the post shader the chain is built around.
+     *
+     * @return chain style
+     */
+    public ChamsChain.Style chainStyle() {
+        return this.shader.get();
+    }
+
+    /**
      * Reports whether the chams chain should replace the vanilla outline effect.
      *
      * @return true when the chain is wanted
@@ -313,6 +327,7 @@ public class Shaders extends Module {
         return switch (this.mode.get()) {
             case Neon -> 4;
             case Ghost -> 2;
+            case Aura -> 7;
             case Glow, Full -> this.glowRadius.get();
             case Custom -> this.glow.get() ? this.glowRadius.get() : 0;
             default -> 0;
@@ -328,6 +343,7 @@ public class Shaders extends Module {
         return switch (this.mode.get()) {
             case Neon -> 2.2F;
             case Ghost -> 1.0F;
+            case Aura -> 1.8F;
             case Glow, Full -> this.glowIntensity.get().floatValue();
             case Custom -> this.glow.get() ? this.glowIntensity.get().floatValue() : 0.0F;
             default -> 0.0F;
@@ -343,6 +359,7 @@ public class Shaders extends Module {
         return switch (this.mode.get()) {
             case Neon -> 0.15F;
             case Ghost -> 0.25F;
+            case Aura -> 0.08F;
             case Chams, Full -> this.fillAlpha.get().floatValue();
             case Custom -> this.fill.get() ? this.fillAlpha.get().floatValue() : 0.0F;
             default -> 0.0F;
@@ -372,6 +389,7 @@ public class Shaders extends Module {
         return switch (this.mode.get()) {
             case Neon -> 0.6F;
             case Ghost -> 0.2F;
+            case Aura -> 0.9F;
             // Chams and Full always fill, so the inner glow is theirs to use directly.
             case Chams, Full -> this.innerGlow.get().floatValue();
             case Custom -> this.fill.get() ? this.innerGlow.get().floatValue() : 0.0F;
@@ -386,59 +404,6 @@ public class Shaders extends Module {
      */
     public float chainFillBrightness() {
         return this.fillBrightness.get().floatValue();
-    }
-
-    /**
-     * Reports a missing render hook instead of letting the option do nothing.
-     *
-     * <p>The hook only runs when the entity pass reaches the call it replaces. Waiting a moment
-     * keeps the world load frame, where the pass has not run yet, from reporting a false alarm.
-     *
-     * @param event post-tick event
-     */
-    @EventHandler
-    private void onTick(TickEvent.Post event) {
-        if (!this.isActive() || !this.selfInFirstPerson()) {
-            this.missingHookTicks = 0;
-            this.warnedMissingHook = false;
-            return;
-        }
-
-        MinecraftClient client = MinecraftClient.getInstance();
-
-        if (client.player == null || !client.options.getPerspective().isFirstPerson()) {
-            this.missingHookTicks = 0;
-            return;
-        }
-
-        if (WorldRendererMixin.selfHookApplied()) {
-            this.missingHookTicks = 0;
-            this.warnedMissingHook = false;
-            return;
-        }
-
-        if (++this.missingHookTicks < 60) return;
-
-        this.missingHookTicks = 0;
-
-        if (this.warnedMissingHook) return;
-
-        this.warnedMissingHook = true;
-
-        String message = "self-first-person is on, but the entity render hook was not found: "
-            + "the self model cannot be drawn in first person on this Minecraft version.";
-
-        StashOrganizerAddon.LOG.warn(message);
-        this.warning(message);
-    }
-
-    /**
-     * Reports whether your own model is drawn in first person.
-     *
-     * @return true when the local player is rendered without switching to third person
-     */
-    public boolean selfInFirstPerson() {
-        return this.self.get() && this.selfFirstPerson.get();
     }
 
     /**
@@ -461,7 +426,23 @@ public class Shaders extends Module {
         SettingColor color = this.colorOf(this.kindOf(entity));
         if (color == null) return -1;
 
+        if (this.rainbow.get()) return (color.a << 24) | Colours.hsv(this.hue(entity));
+
         return (color.a << 24) | (color.r << 16) | (color.g << 8) | color.b;
+    }
+
+    /**
+     * Returns the hue of an entity on the current frame.
+     *
+     * <p>The offset per entity id keeps neighbouring players from sharing the exact same colour,
+     * which is what makes two overlapping outlines readable.
+     *
+     * @param entity entity being drawn
+     * @return hue in the range {@code [0, 1)}
+     */
+    private float hue(Entity entity) {
+        double phase = (System.currentTimeMillis() % 12000L) / 12000.0;
+        return (float) ((phase + entity.getId() * 0.037) % 1.0);
     }
 
     /**
@@ -471,6 +452,12 @@ public class Shaders extends Module {
      */
     public int fallback() {
         SettingColor color = this.fallbackColor.get();
+
+        if (this.rainbow.get()) {
+            double phase = (System.currentTimeMillis() % 12000L) / 12000.0;
+            return (color.a << 24) | Colours.hsv((float) phase);
+        }
+
         return (color.a << 24) | (color.r << 16) | (color.g << 8) | color.b;
     }
 
@@ -485,7 +472,8 @@ public class Shaders extends Module {
 
         if (current == Mode.Custom) return this.glow.get();
 
-        return current == Mode.Glow || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost;
+        return current == Mode.Glow || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost
+            || current == Mode.Aura;
     }
 
     private boolean usesFill() {
@@ -493,7 +481,8 @@ public class Shaders extends Module {
 
         if (current == Mode.Custom) return this.fill.get();
 
-        return current == Mode.Chams || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost;
+        return current == Mode.Chams || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost
+            || current == Mode.Aura;
     }
 
     /** Categories the module knows how to outline. */
