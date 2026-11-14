@@ -1,6 +1,8 @@
 package com.pro0101.stashorganizer.modules.hyperglide;
 
 import com.pro0101.stashorganizer.StashOrganizerAddon;
+import com.pro0101.stashorganizer.modules.huntbuddy.ElytraMace;
+import com.pro0101.stashorganizer.util.ModuleSettings;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Client;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Elytra;
 import com.pro0101.stashorganizer.modules.hyperglide.utilities.Flight;
@@ -26,12 +28,13 @@ import net.minecraft.entity.projectile.FireworkRocketEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 public class ControlFly extends Module {
     private static final double epsilon = 1.0E-3;
-    private static final double ceiling = 34.0;
+    private static final double ceiling = 120.0;
     private static final double ticks = 20.0;
 
     private static final float bound = 60.0F;
@@ -41,16 +44,19 @@ public class ControlFly extends Module {
     private static final double gain = 0.60;
     private static final double push = 0.025;
     private static final double sharp = Math.cos(Math.toRadians(45.0));
+    private static final float porpoisePitch = 22.5F;
 
     private final SettingGroup movement = this.settings.createGroup("Movement");
     private final SettingGroup automation = this.settings.createGroup("Automation");
+    private final SettingGroup porpoiseGroup = this.settings.createGroup("Porpoise");
+    private final SettingGroup chestSwapGroup = this.settings.createGroup("Chest Swap");
 
     private final Setting<Double> maximum = this.movement.add(new DoubleSetting.Builder()
         .name("maximum-speed")
-        .description("Maximum controlled speed in blocks per second.")
+        .description("Maximum controlled speed in blocks per second. The default 34 is the safe elytra limit; raise it for porpoise or RocketBoost flights.")
         .defaultValue(34.0)
         .min(10.0)
-        .sliderMax(34.0)
+        .sliderMax(120.0)
         .build()
     );
 
@@ -59,7 +65,7 @@ public class ControlFly extends Module {
         .description("Uses a rocket when speed drops below this value.")
         .defaultValue(27.0)
         .min(10.0)
-        .sliderMax(34.0)
+        .sliderMax(120.0)
         .build()
     );
 
@@ -78,6 +84,15 @@ public class ControlFly extends Module {
         .defaultValue(50)
         .min(0)
         .sliderMax(250)
+        .build()
+    );
+
+    private final Setting<Double> alignment = this.movement.add(new DoubleSetting.Builder()
+        .name("alignment")
+        .description("How much of the steering yaw is sent to the server. 1 aligns the flight fully; 0 leaves your yaw alone, which is what Baritone needs so it keeps its own heading.")
+        .defaultValue(1.0)
+        .min(0.0)
+        .sliderRange(0.0, 1.0)
         .build()
     );
 
@@ -105,6 +120,31 @@ public class ControlFly extends Module {
         .build()
     );
 
+    private final Setting<Boolean> porpoise = this.porpoiseGroup.add(new BoolSetting.Builder()
+        .name("porpoise")
+        .description("Steers climb and dive legs while travelling instead of holding one altitude. Each leg is checked against terrain and the swing recentres when both ends are obstructed.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Double> porpoiseHeight = this.porpoiseGroup.add(new DoubleSetting.Builder()
+        .name("porpoise-height")
+        .description("Vertical size of the swing in blocks. Larger swings trade more height for more speed.")
+        .defaultValue(24.0)
+        .min(4.0)
+        .sliderRange(4.0, 250.0)
+        .visible(this.porpoise::get)
+        .build()
+    );
+
+    private final Setting<Boolean> chestSwap = this.chestSwapGroup.add(new BoolSetting.Builder()
+        .name("chest-swap")
+        .description("Hands no-durability flight to Elytra Tweaks' spoof mode: a chestplate stays worn while the elytra is only swapped in for the server's glide restart. Needs the elytra and a chestplate, one worn and the other in a hand.")
+        .defaultValue(false)
+        .onChanged(this::chestSwapChanged)
+        .build()
+    );
+
     private final Boost boost = new Boost();
     private final Flight flight = Flight.get();
     private final Takeoff input = new Takeoff();
@@ -112,11 +152,16 @@ public class ControlFly extends Module {
     private final Turn turn = new Turn();
     private final View view = new View();
 
+    private ElytraTweaks tweaks;
+    private Setting<Boolean> spoof;
+    private Boolean spoofBefore;
+    private boolean tweaksEnabledByUs;
+
     private int jump;
 
     public ControlFly() {
         super(StashOrganizerAddon.CATEGORY, "control-fly",
-            "Provides controlled flight with automatic rocket boosting."
+            "Provides controlled flight with automatic rocket boosting, porpoise and a no-durability chest swap."
         );
     }
 
@@ -132,8 +177,11 @@ public class ControlFly extends Module {
         this.view.pitch = this.mc.player.getPitch();
 
         this.motion.yaw = this.view.yaw;
+        this.motion.aligned = this.view.yaw;
         this.motion.pitch = this.view.pitch;
         this.motion.altitude = this.mc.player.getY();
+
+        this.applyChestSwap();
     }
 
     /**
@@ -141,6 +189,7 @@ public class ControlFly extends Module {
      */
     @Override
     public void onDeactivate() {
+        this.releaseChestSwap();
         this.restore();
         this.reset();
     }
@@ -153,7 +202,7 @@ public class ControlFly extends Module {
      */
     @EventHandler
     private void tick(TickEvent.Pre event) {
-        if (!Client.ready()) return;
+        if (!Client.ready() || ElytraMace.isDiving()) return;
 
         this.update();
         this.input.pulse();
@@ -182,7 +231,7 @@ public class ControlFly extends Module {
      */
     @EventHandler
     private void move(PlayerMoveEvent event) {
-        if (!Client.ready() ||
+        if (!Client.ready() || ElytraMace.isDiving() ||
             event.type != MovementType.SELF ||
             !this.mc.player.isGliding() ||
             this.halted()) return;
@@ -251,8 +300,13 @@ public class ControlFly extends Module {
         this.input.reset();
 
         this.motion.yaw = 0.0F;
+        this.motion.aligned = 0.0F;
         this.motion.pitch = 0.0F;
         this.motion.altitude = 0.0;
+
+        this.motion.porpoise = false;
+        this.motion.porpoiseUp = false;
+        this.motion.porpoiseBase = 0.0;
 
         this.view.active = false;
         this.view.yaw = 0.0F;
@@ -279,6 +333,8 @@ public class ControlFly extends Module {
         this.motion.input = 0;
         this.motion.dir = Vec3d.ZERO;
         this.motion.brake = false;
+
+        this.motion.porpoise = false;
 
         this.turn.active = false;
     }
@@ -309,6 +365,7 @@ public class ControlFly extends Module {
 
         Vec3d steer = this.steer(input.normalize());
         this.turn(steer);
+        this.motion.aligned = this.aligned(this.motion.yaw);
 
         boolean boosted = this.active();
         this.aim(steer, boosted, manual);
@@ -316,7 +373,7 @@ public class ControlFly extends Module {
         boolean launch = this.launch(steer, boosted, redirect);
         if (launch) this.prepare(manual);
 
-        this.mc.player.setYaw(this.motion.yaw);
+        this.mc.player.setYaw(this.motion.aligned);
         this.mc.player.setPitch(this.motion.pitch);
 
         this.rotate(launch);
@@ -343,6 +400,7 @@ public class ControlFly extends Module {
         this.motion.steering = false;
 
         this.motion.yaw = this.mc.player.getYaw();
+        this.motion.aligned = this.motion.yaw;
         this.motion.pitch = this.mc.player.getPitch();
 
         if (!this.renew()) return;
@@ -672,11 +730,19 @@ public class ControlFly extends Module {
      */
     private void aim(Vec3d dir, boolean boosted, boolean manual) {
         if (manual) {
+            this.motion.porpoise = false;
             this.motion.leveling = false;
             this.motion.altitude = this.mc.player.getY();
             this.motion.pitch = this.angle(dir);
             return;
         }
+
+        if (this.porpoise.get()) {
+            this.porpoise();
+            return;
+        }
+
+        this.motion.porpoise = false;
 
         if (!this.motion.leveling) {
             this.motion.altitude = this.mc.player.getY();
@@ -719,6 +785,93 @@ public class ControlFly extends Module {
     }
 
     /**
+     * Steers one porpoise leg at a time, reversing at the configured height
+     * and at terrain. A swing with both ends obstructed recentres on the
+     * player instead of looping into the obstruction.
+     */
+    private void porpoise() {
+        double y = this.mc.player.getY();
+        double half = Math.max(2.0, this.porpoiseHeight.get() / 2.0);
+
+        if (!this.motion.porpoise ||
+            Math.abs(y - this.motion.porpoiseBase) > half * 3.0) {
+            this.motion.porpoise = true;
+            this.motion.porpoiseBase = y;
+            this.motion.porpoiseUp = true;
+        }
+
+        double low = this.motion.porpoiseBase - half;
+        double high = this.motion.porpoiseBase + half;
+
+        boolean up = this.clear(y, high);
+        boolean down = this.clear(y, low);
+
+        if (!up && !down) {
+            this.motion.porpoiseBase = y;
+            this.motion.porpoiseUp = true;
+            this.motion.pitch = -porpoisePitch;
+            return;
+        }
+
+        if (this.motion.porpoiseUp && (!up || y >= high)) {
+            this.motion.porpoiseUp = false;
+        } else if (!this.motion.porpoiseUp && (!down || y <= low)) {
+            this.motion.porpoiseUp = true;
+        }
+
+        this.motion.pitch = this.motion.porpoiseUp
+            ? -porpoisePitch : porpoisePitch;
+    }
+
+    /**
+     * Checks the column between two heights for blocks the swing would hit.
+     *
+     * @param from first height
+     * @param to second height
+     * @return true when the column is clear
+     */
+    private boolean clear(double from, double to) {
+        if (this.mc.world == null || this.mc.player == null) return false;
+
+        int min = MathHelper.floor(Math.min(from, to));
+        int max = MathHelper.floor(Math.max(from, to)) + 1;
+        int x = MathHelper.floor(this.mc.player.getX());
+        int z = MathHelper.floor(this.mc.player.getZ());
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+
+        for (int y = min; y <= max; y++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    pos.set(x + dx, y, z + dz);
+                    if (!this.mc.world.getBlockState(pos)
+                        .getCollisionShape(this.mc.world, pos).isEmpty()) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Blends the steering yaw toward the player's current yaw. Zero leaves the
+     * yaw untouched so Baritone can keep its own heading.
+     *
+     * @param yaw steering yaw
+     * @return yaw to send to the server
+     */
+    private float aligned(float yaw) {
+        double factor = this.alignment.get();
+        if (factor >= 1.0) return yaw;
+
+        float base = this.view.active
+            ? this.view.yaw : this.mc.player.getYaw();
+
+        return base + MathHelper.wrapDegrees(yaw - base) * (float) factor;
+    }
+
+    /**
      * Searches pitch values for the best leveling result.
      *
      * @param velocity current player velocity
@@ -753,7 +906,7 @@ public class ControlFly extends Module {
      * @return candidate score
      */
     private double score(Vec3d velocity, float pitch, double desired, boolean boosted) {
-        Vec3d next = this.predict(velocity, this.motion.yaw, pitch, boosted);
+        Vec3d next = this.predict(velocity, this.motion.aligned, pitch, boosted);
         double score = Math.abs(next.y - desired);
 
         score += Math.max(0.0,
@@ -776,10 +929,10 @@ public class ControlFly extends Module {
 
         if (launch) {
             changed = true;
-            float yaw = this.motion.yaw, pitch = this.motion.pitch;
+            float yaw = this.motion.aligned, pitch = this.motion.pitch;
             Rotations.rotate(yaw, pitch, priority, () -> this.rocket(yaw, pitch));
         } else if (changed) {
-            Rotations.rotate(this.motion.yaw, this.motion.pitch, priority);
+            Rotations.rotate(this.motion.aligned, this.motion.pitch, priority);
         }
 
         if (changed) this.remember();
@@ -793,7 +946,7 @@ public class ControlFly extends Module {
     private boolean changed() {
         return !this.turn.active ||
             Math.abs(MathHelper.wrapDegrees(
-                this.motion.yaw - this.turn.yaw)) > 0.05F ||
+                this.motion.aligned - this.turn.yaw)) > 0.05F ||
             Math.abs(
                 this.motion.pitch - this.turn.pitch) > 0.05F;
     }
@@ -802,7 +955,7 @@ public class ControlFly extends Module {
      * Stores the most recently synchronized flight rotation.
      */
     private void remember() {
-        this.turn.yaw = this.motion.yaw;
+        this.turn.yaw = this.motion.aligned;
         this.turn.pitch = this.motion.pitch;
         this.turn.active = true;
     }
@@ -887,7 +1040,7 @@ public class ControlFly extends Module {
         if (diving || !boosted && redirect) return true;
 
         Vec3d next = this.predict(this.mc.player.getVelocity(),
-            this.motion.yaw, this.motion.pitch, boosted
+            this.motion.aligned, this.motion.pitch, boosted
         );
 
         return next.horizontalLength() < Math.min(
@@ -902,7 +1055,7 @@ public class ControlFly extends Module {
      */
     private void prepare(boolean manual) {
         this.await();
-        if (manual) return;
+        if (manual || this.porpoise.get()) return;
 
         Vec3d velocity = this.mc.player.getVelocity();
         this.motion.pitch = this.level(velocity, true);
@@ -1095,6 +1248,73 @@ public class ControlFly extends Module {
 
 
     /**
+     * Enables the shared no-durability spoof mode while chest swap is on.
+     */
+    private void applyChestSwap() {
+        if (!this.chestSwap.get() || this.mc.player == null) return;
+
+        if (this.tweaks == null) {
+            this.tweaks = Modules.get().get(ElytraTweaks.class);
+        }
+
+        if (this.tweaks == null) return;
+
+        if (!this.tweaks.isActive()) {
+            this.tweaks.toggle();
+            this.tweaksEnabledByUs = true;
+        }
+
+        this.spoof = ModuleSettings.get(this.tweaks, "spoof-mode");
+        if (this.spoof == null) return;
+
+        if (this.spoofBefore == null) {
+            this.spoofBefore = this.spoof.get();
+        }
+
+        if (!this.spoof.get()) this.spoof.set(true);
+    }
+
+    /**
+     * Releases the shared spoof mode once the glide is over.
+     */
+    private void releaseChestSwap() {
+        if (this.tweaks == null) return;
+
+        if (this.mc.player != null && this.mc.player.isGliding()) {
+            this.info("Chest swap stays with Elytra Tweaks until you land.");
+            return;
+        }
+
+        if (this.spoof != null && Boolean.FALSE.equals(this.spoofBefore)) {
+            this.spoof.set(false);
+        }
+
+        if (this.tweaksEnabledByUs && this.tweaks.isActive()) {
+            this.tweaks.toggle();
+        }
+
+        this.tweaks = null;
+        this.spoof = null;
+        this.spoofBefore = null;
+        this.tweaksEnabledByUs = false;
+    }
+
+    /**
+     * Applies the chest swap setting only while this module is running.
+     *
+     * @param enabled whether chest swap was turned on
+     */
+    private void chestSwapChanged(boolean enabled) {
+        if (!this.isActive()) return;
+
+        if (enabled) {
+            this.applyChestSwap();
+        } else {
+            this.releaseChestSwap();
+        }
+    }
+
+    /**
      * Stores a candidate leveling pitch and its prediction score.
      *
      * @param pitch candidate pitch
@@ -1113,9 +1333,14 @@ public class ControlFly extends Module {
         private boolean steering;
         private boolean brake;
 
+        private boolean porpoise;
+        private boolean porpoiseUp;
+        private double porpoiseBase;
+
         private double altitude;
 
         private float yaw;
+        private float aligned;
         private float pitch;
     }
 

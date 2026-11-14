@@ -56,13 +56,26 @@ The jar lands in `build/libs`.
 A dozen modules come from other Meteor addons and are distributed here under the GPL-3.0, with their authors credited:
 the Hyperglide travel suite (`fast-frame`, `overview`, `navigation`, `auto-pilot`, `elytra-tweaks`, `bounce-fly`,
 `control-fly`, `air-place`, `mining-tweaks`), `shulker-sorter`, `sign-history`, `trail-follower` and `chunk-radar`
-from HunterBuddy, and `AutoDyeShulkers` from BepHax. See `CREDITS.md` for the repositories, commits and the changes made.
+from HunterBuddy, and `AutoDyeShulkers` and `chest-tracker` from BepHax. See `CREDITS.md` for the repositories,
+commits and the changes made.
 `hotbar-refill` and `inventory-cleaner` also come from HunterBuddy: the first tops the held stack up from the main
 inventory before it runs out, the second throws out what a list does not keep, which is what a stash trip leaves
 behind.
 
-Later additions: `stash-brander`, `chest-index`, `better-stash-finder`, `search-area`, `fast-portal`, `easy-access`,
-`hotbar-refill`, `inventory-cleaner` and `skybox`.
+`control-fly` adds the `porpoise` climb/dive swing with `porpoise-height`, an `alignment` control that can leave the
+yaw to Baritone, and a `chest-swap` that delegates no-durability flight to `elytra-tweaks`' spoof mode.
+
+`chest-tracker` remembers every chest, barrel, shulker box, hopper and dispenser you open, indexes their contents per
+dimension, and searches that index from the `Y` browser or the `chesttracker` command. It can also open nearby
+containers itself and draw the saved containers in the world.
+
+`elytra-mace` dives from a glide onto a player below, predicts the target's position, puts on a chestplate for the
+smash, restores the elytra and climbs away on rockets. It stands `control-fly` and `elytra-recast` down while the dive
+is in progress, takes the mace and chestplate from anywhere in the inventory, and in `repeat` mode stops after two
+dives without a hit.
+
+Later additions: `stash-brander`, `better-stash-finder`, `base-finder`, `flow-esp`, `search-area`, `fast-portal`,
+`easy-access`, `hotbar-refill`, `inventory-cleaner`, `chest-tracker`, `elytra-mace` and `skybox`.
 
 `ChunkRadar` and `TrailFollower` need [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap),
 [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) and

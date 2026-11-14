@@ -115,6 +115,7 @@ public class ElytraRecast extends Module {
 
     @EventHandler
     private void onPreTick(TickEvent.Pre event) {
+        if (ElytraMace.isDiving()) return;
         if (mc.player != null) wearer.retryPendingWear(mc.player);
         if (!canRun() || preTickGate.alreadySeen(mc.player.age)) return;
         preTickGate.record(mc.player.age);

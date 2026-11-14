@@ -50,6 +50,27 @@ public final class GliderSwap {
       return equippable != null && equippable.slot() == EquipmentSlot.CHEST && !isGlider(stack);
    }
 
+   /**
+    * Reports Curse of Binding, i.e. armour that the server refuses to let the
+    * player take off. Handlers must never try to swap such a piece out of the
+    * chest slot, and must never wear one on purpose.
+    */
+   public static boolean hasBindingCurse(ItemStack stack) {
+      if (stack.isEmpty()) {
+         return false;
+      }
+
+      return EnchantmentHelper.hasAnyEnchantmentsWith(stack, EnchantmentEffectComponentTypes.PREVENT_ARMOR_CHANGE);
+   }
+
+   /**
+    * A chest piece that may be worn for a swap without trapping the player in
+    * it afterwards.
+    */
+   public static boolean isSafeChestPiece(ItemStack stack) {
+      return isChestPiece(stack) && !hasBindingCurse(stack);
+   }
+
    public static Hand gliderHand(ClientPlayerEntity player) {
       if (isGlider(player.getStackInHand(Hand.MAIN_HAND))) {
          return Hand.MAIN_HAND;
@@ -136,7 +157,7 @@ public final class GliderSwap {
          return "chest swap needs a glider and a chest piece, one worn and the other in a hand";
       }
 
-      if (EnchantmentHelper.hasAnyEnchantmentsWith(worn, EnchantmentEffectComponentTypes.PREVENT_ARMOR_CHANGE) && !player.isCreative()) {
+      if (hasBindingCurse(worn) && !player.isCreative()) {
          return "chest piece has Curse of Binding";
       }
 

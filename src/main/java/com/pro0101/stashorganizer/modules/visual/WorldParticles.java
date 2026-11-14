@@ -15,16 +15,17 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Spawns ambient particles in the air in front of the player.
+ * Spawns ambient particles in the air around the player.
  *
  * <p>The particles are ordinary client-side particles, added through the same call the game uses
  * for its own effects: nothing is sent to the server, and they live and die on their own. The module
  * only decides where new ones appear.
  *
- * <p>Positions are sampled in a cone around the exact look direction, pitch included, so they stay
- * in the view whether you look at the horizon, up into the canopy or down at the ground. Pale oak
- * leaves are the default because they are the small white petals the vanilla pale garden drifts
- * around; the other types cover the usual ambient looks without a resource pack.
+ * <p>Positions are sampled in a full sphere around the player, not in the look direction, so the
+ * air keeps drifting with particles behind you and to the sides too. Turning the camera does not
+ * change where the next ones appear. Pale oak leaves are the default because they are the small
+ * white petals the vanilla pale garden drifts around; the other types cover the usual ambient looks
+ * without a resource pack.
  */
 public class WorldParticles extends Module {
     /** Particle looks. */
@@ -46,9 +47,6 @@ public class WorldParticles extends Module {
         /** Small glowing dots. */
         Glow
     }
-
-    /** Half-angle of the cone around the look direction. */
-    private static final double cone = Math.toRadians(55.0);
 
     /** Closest a particle may appear, so none is spawned on the camera. */
     private static final double inner = 2.0;
@@ -73,7 +71,7 @@ public class WorldParticles extends Module {
 
     private final Setting<Integer> radius = this.general.add(new IntSetting.Builder()
         .name("radius")
-        .description("How far in front of you particles are spawned, in blocks.")
+        .description("How far around you particles are spawned, in blocks.")
         .defaultValue(16)
         .range(4, 48)
         .build()
@@ -91,7 +89,7 @@ public class WorldParticles extends Module {
     private double pending;
 
     public WorldParticles() {
-        super(StashOrganizerAddon.VISUALS, "world-particles", "Spawns ambient particles in front of you.");
+        super(StashOrganizerAddon.VISUALS, "world-particles", "Spawns ambient particles around you.");
     }
 
     @Override
@@ -116,27 +114,20 @@ public class WorldParticles extends Module {
         this.pending -= count;
 
         Vec3d eye = this.mc.player.getEyePos();
-        // getRotationVec is already a unit vector, and both cross products below are between
-        // perpendicular unit vectors, so no extra normalisation is needed.
-        Vec3d look = this.mc.player.getRotationVec(1.0F);
-        Vec3d right = this.axis(look);
-        Vec3d up = right.crossProduct(look);
 
         double limit = this.radius.get();
         double drift = this.speed.get() * 0.02;
         ParticleEffect effect = this.effect();
 
         for (int i = 0; i < count; i++) {
+            // A uniform point on the unit sphere: z is uniform, theta picks the longitude.
+            double z = Math.random() * 2.0 - 1.0;
             double theta = Math.random() * Math.PI * 2.0;
-            double angle = cone * Math.sqrt(Math.random());
-            double distance = inner + Math.random() * (limit - inner);
+            double ring = Math.sqrt(1.0 - z * z);
+            Vec3d direction = new Vec3d(Math.cos(theta) * ring, z, Math.sin(theta) * ring);
 
-            double cos = Math.cos(angle);
-            double sin = Math.sin(angle);
-            Vec3d direction = look.multiply(cos)
-                .add(right.multiply(Math.cos(theta) * sin))
-                .add(up.multiply(Math.sin(theta) * sin));
-
+            // Cube root keeps the density even through the volume instead of bunching near the eye.
+            double distance = inner + (limit - inner) * Math.cbrt(Math.random());
             Vec3d pos = eye.add(direction.multiply(distance));
             BlockPos block = BlockPos.ofFloored(pos);
 
@@ -149,21 +140,6 @@ public class WorldParticles extends Module {
                 (Math.random() - 0.5) * drift
             );
         }
-    }
-
-    /**
-     * Returns an axis perpendicular to the look direction.
-     *
-     * <p>Looking straight up or down makes the usual up-vector cross product vanish, so that case
-     * falls back to the world X axis.
-     *
-     * @param look look direction
-     * @return unit axis perpendicular to {@code look}
-     */
-    private Vec3d axis(Vec3d look) {
-        Vec3d axis = look.crossProduct(new Vec3d(0.0, 1.0, 0.0));
-
-        return axis.lengthSquared() < 1.0e-6 ? new Vec3d(1.0, 0.0, 0.0) : axis.normalize();
     }
 
     /**
