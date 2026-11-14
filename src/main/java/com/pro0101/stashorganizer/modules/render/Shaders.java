@@ -57,6 +57,8 @@ public class Shaders extends Module {
         Ghost,
         /** Wide halo around a bright core and an almost clear body, for an aura around the model. */
         Aura,
+        /** Very wide halo with a white-hot body, drawn with the Bloom chain shader. */
+        Bloom,
         /** The individual switches below decide. */
         Custom
     }
@@ -194,15 +196,15 @@ public class Shaders extends Module {
 
     private final Setting<ChamsChain.Style> shader = this.chain.add(new EnumSetting.Builder<ChamsChain.Style>()
         .name("shader")
-        .description("Which post shader draws the effect: the soft two-pass glow, an exact-pixel edge, a radial aura, or a rainbow gradient computed on screen.")
+        .description("Which post shader draws the effect: the soft two-pass glow, an exact-pixel edge, a radial aura, a wide bloom, a rainbow gradient computed on screen, or one of the themed looks. The Bloom preset carries its own and hides this setting.")
         .defaultValue(ChamsChain.Style.Soft)
-        .visible(this.customChain::get)
+        .visible(() -> this.customChain.get() && this.mode.get() != Mode.Bloom)
         .build()
     );
 
     private final Setting<Mode> mode = this.chain.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Outline, Glow, Chams and Full preset the three layers; Custom leaves them to the switches below.")
+        .description("Outline, Glow, Chams and Full preset the three layers; Aura and Bloom widen the halo, and Bloom also selects its own shader; Custom leaves them to the switches below.")
         .defaultValue(Mode.Full)
         .visible(this.customChain::get)
         .build()
@@ -303,9 +305,15 @@ public class Shaders extends Module {
     /**
      * Returns the post shader the chain is built around.
      *
+     * <p>The Bloom preset is a complete look, so it always uses {@link ChamsChain.Style#Bloom};
+     * its shader setting is hidden while it is selected. Every other preset keeps the shader
+     * chosen in the setting, so switching to Bloom and back leaves the old choice intact.
+     *
      * @return chain style
      */
     public ChamsChain.Style chainStyle() {
+        if (this.mode.get() == Mode.Bloom) return ChamsChain.Style.Bloom;
+
         return this.shader.get();
     }
 
@@ -328,6 +336,7 @@ public class Shaders extends Module {
             case Neon -> 4;
             case Ghost -> 2;
             case Aura -> 7;
+            case Bloom -> 9;
             case Glow, Full -> this.glowRadius.get();
             case Custom -> this.glow.get() ? this.glowRadius.get() : 0;
             default -> 0;
@@ -344,6 +353,7 @@ public class Shaders extends Module {
             case Neon -> 2.2F;
             case Ghost -> 1.0F;
             case Aura -> 1.8F;
+            case Bloom -> 2.6F;
             case Glow, Full -> this.glowIntensity.get().floatValue();
             case Custom -> this.glow.get() ? this.glowIntensity.get().floatValue() : 0.0F;
             default -> 0.0F;
@@ -360,6 +370,7 @@ public class Shaders extends Module {
             case Neon -> 0.15F;
             case Ghost -> 0.25F;
             case Aura -> 0.08F;
+            case Bloom -> 0.12F;
             case Chams, Full -> this.fillAlpha.get().floatValue();
             case Custom -> this.fill.get() ? this.fillAlpha.get().floatValue() : 0.0F;
             default -> 0.0F;
@@ -390,6 +401,7 @@ public class Shaders extends Module {
             case Neon -> 0.6F;
             case Ghost -> 0.2F;
             case Aura -> 0.9F;
+            case Bloom -> 1.0F;
             // Chams and Full always fill, so the inner glow is theirs to use directly.
             case Chams, Full -> this.innerGlow.get().floatValue();
             case Custom -> this.fill.get() ? this.innerGlow.get().floatValue() : 0.0F;
@@ -473,7 +485,7 @@ public class Shaders extends Module {
         if (current == Mode.Custom) return this.glow.get();
 
         return current == Mode.Glow || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost
-            || current == Mode.Aura;
+            || current == Mode.Aura || current == Mode.Bloom;
     }
 
     private boolean usesFill() {
@@ -482,7 +494,7 @@ public class Shaders extends Module {
         if (current == Mode.Custom) return this.fill.get();
 
         return current == Mode.Chams || current == Mode.Full || current == Mode.Neon || current == Mode.Ghost
-            || current == Mode.Aura;
+            || current == Mode.Aura || current == Mode.Bloom;
     }
 
     /** Categories the module knows how to outline. */

@@ -109,18 +109,19 @@ public class ChestCounterHud extends HudElement {
 
         setSize(width + PADDING * 2, lineHeight * 3 + PADDING * 2);
 
+        HudBloom.panel(renderer, x, y, getWidth(), getHeight(), DOUBLE_COLOR);
         renderer.quad(x, y, getWidth(), getHeight(), BACKGROUND);
 
         double textX = x + PADDING;
         double textY = y + PADDING;
 
-        renderer.text("Chests", textX, textY, Color.WHITE, true);
+        HudBloom.text(renderer, "Chests", textX, textY, Color.WHITE, true);
         textY += lineHeight;
 
-        renderer.text(doubleLine, textX, textY, DOUBLE_COLOR, true);
+        HudBloom.text(renderer, doubleLine, textX, textY, DOUBLE_COLOR, true);
         textY += lineHeight;
 
-        renderer.text(singleLine, textX, textY, SINGLE_COLOR, true);
+        HudBloom.text(renderer, singleLine, textX, textY, SINGLE_COLOR, true);
     }
 
     /**

@@ -56,16 +56,17 @@ public class StashHud extends HudElement {
 
         setSize(width + PADDING * 2, height);
 
+        HudBloom.panel(renderer, x, y, getWidth(), getHeight(), BAR_COLOR);
         renderer.quad(x, y, getWidth(), getHeight(), BACKGROUND);
 
         double textX = x + PADDING;
         double textY = y + PADDING;
 
-        renderer.text(TITLE, textX, textY, Color.WHITE, true);
+        HudBloom.text(renderer, TITLE, textX, textY, Color.WHITE, true);
         textY += lineHeight;
 
         for (String line : lines) {
-            renderer.text(line, textX, textY, LINE_COLOR, true);
+            HudBloom.text(renderer, line, textX, textY, LINE_COLOR, true);
             textY += lineHeight;
         }
 

@@ -115,6 +115,7 @@ public class PresetPreviewHud extends HudElement {
 
         setSize(width + PADDING * 2 + (this.swatch.get() ? SWATCH : 0), lineHeight * lines.size() + PADDING * 2);
 
+        HudBloom.panel(renderer, x, y, getWidth(), getHeight(), ACTIVE);
         renderer.quad(x, y, getWidth(), getHeight(), BACKGROUND);
 
         double textX = x + PADDING;
@@ -126,7 +127,12 @@ public class PresetPreviewHud extends HudElement {
             }
 
             double startX = line.indent() ? textX + INDENT : textX;
-            renderer.text(line.text(), startX, textY, line.color(), true);
+
+            if (line.indent()) {
+                renderer.text(line.text(), startX, textY, line.color(), true);
+            } else {
+                HudBloom.text(renderer, line.text(), startX, textY, line.color(), true);
+            }
 
             textY += lineHeight;
         }

@@ -32,6 +32,7 @@ import java.util.Set;
  *   <li>{@link Style#Soft} — the separable gaussian, in two passes;</li>
  *   <li>{@link Style#Edge} — an exact-pixel rim from eight-direction taps;</li>
  *   <li>{@link Style#Aura} — a golden-angle spiral whose alpha falls off with distance;</li>
+ *   <li>{@link Style#Bloom} — a wide spiral halo around a white-hot core;</li>
  *   <li>{@link Style#Rainbow} — a hue gradient computed in the shader;</li>
  *   <li>{@link Style#Frost}, {@link Style#Ember}, {@link Style#Void} and {@link Style#Solar} —
  *       themed looks whose colours are built from ice, lava, portal rings and a corona.</li>
@@ -53,6 +54,7 @@ public final class ChamsChain {
     private static final Identifier V_FRAGMENT = Identifier.of("stashorganizer", "post/chams_v");
     private static final Identifier EDGE_FRAGMENT = Identifier.of("stashorganizer", "post/chams_edge");
     private static final Identifier AURA_FRAGMENT = Identifier.of("stashorganizer", "post/chams_aura");
+    private static final Identifier BLOOM_FRAGMENT = Identifier.of("stashorganizer", "post/chams_bloom");
     private static final Identifier RAINBOW_FRAGMENT = Identifier.of("stashorganizer", "post/chams_rainbow");
     private static final Identifier COPY_FRAGMENT = Identifier.of("stashorganizer", "post/chams_copy");
     private static final Identifier FROST_FRAGMENT = Identifier.of("stashorganizer", "post/chams_frost");
@@ -78,6 +80,8 @@ public final class ChamsChain {
         Edge,
         /** Radial halo that fades with distance, for a soft aura. */
         Aura,
+        /** Wide halo spilling off a white-hot core, for a bloom around the model. */
+        Bloom,
         /** Hue gradient computed on screen, for a multi-colour body. */
         Rainbow,
         /** Pale ice that catches the light, for a frost theme. */
@@ -260,6 +264,7 @@ public final class ChamsChain {
         return switch (style) {
             case Edge -> EDGE_FRAGMENT;
             case Aura -> AURA_FRAGMENT;
+            case Bloom -> BLOOM_FRAGMENT;
             case Rainbow -> RAINBOW_FRAGMENT;
             case Frost -> FROST_FRAGMENT;
             case Ember -> EMBER_FRAGMENT;

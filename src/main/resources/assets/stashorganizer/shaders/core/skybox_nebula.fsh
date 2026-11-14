@@ -3,19 +3,12 @@
 #moj_import <minecraft:projection.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
 #moj_import <minecraft:globals.glsl>
+#moj_import <stashorganizer:sky.glsl>
 
 in vec2 screen;
 in vec4 tint;
 
 out vec4 fragColor;
-
-vec3 view_direction(vec2 ndc) {
-    mat4 inv = inverse(ProjMat * ModelViewMat);
-    vec4 near = inv * vec4(ndc, -1.0, 1.0);
-    vec4 far = inv * vec4(ndc, 1.0, 1.0);
-
-    return normalize(far.xyz / far.w - near.xyz / near.w);
-}
 
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
@@ -49,7 +42,7 @@ float clouds(vec2 p) {
 }
 
 void main() {
-    vec3 dir = view_direction(screen);
+    vec3 dir = sky_view_direction(screen);
     float height = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
 
     vec2 plane = dir.xz / max(abs(dir.y) + 0.25, 0.001);
@@ -66,5 +59,5 @@ void main() {
     vec2 star_plane = floor(plane * 180.0);
     float star = step(0.9985, hash(star_plane)) * smoothstep(0.05, 0.4, dir.y);
 
-    fragColor = vec4((base + violet + teal + star) * tint.rgb, 1.0);
+    fragColor = vec4((base + violet + teal + star) * tint.rgb + sky_dither(gl_FragCoord.xy), 1.0);
 }
